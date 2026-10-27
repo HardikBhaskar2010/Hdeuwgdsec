@@ -9,8 +9,8 @@ import {
 } from 'recharts'
 
 const CUTOFF_PRESETS = [
-  { value: '15:30', label: '15:30 London — EPEX GB Day-Ahead Auction' },
-  { value: '09:50', label: '09:50 London — N2EX Gate Closure' },
+  { value: '15:30', label: '15:30 London — EPEX GB Day-Ahead Half-Hourly Auction' },
+  { value: '09:50', label: '09:50 London — N2EX Day-Ahead Hourly Gate Closure' },
 ]
 
 // ── KPI Component ────────────────────────────────────────────────────────────
@@ -144,7 +144,7 @@ function ForecastActualChart({ intervals, onSelectInterval }: {
             stroke="#ffffff"
             strokeWidth={1.8}
             dot={false}
-            name="Forecast (D−1 Chosen)"
+            name="Forecast (D−1 Chosen Pre-Cutoff)"
             connectNulls={false}
           />
           <Line
@@ -153,7 +153,7 @@ function ForecastActualChart({ intervals, onSelectInterval }: {
             stroke="#717579"
             strokeWidth={1.8}
             dot={false}
-            name="Actual (Outturn)"
+            name="Actual Outturn (FUELHH)"
             connectNulls={false}
           />
         </LineChart>
@@ -226,7 +226,7 @@ function ErrorHistogram({ intervals, p5, p95 }: {
   }
 
   return (
-    <div className="chart-wrap" aria-label="Error distribution histogram with empirical P5 and P95 hedge buffer lines.">
+    <div className="chart-wrap" aria-label="Error distribution histogram with empirical P5 and P95 quantile lines.">
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={bins} barSize={12}>
           <CartesianGrid strokeDasharray="3 3" stroke="#252729" vertical={false} />
@@ -314,17 +314,18 @@ function BreakdownCharts({ data }: { data: AnalysisResponse }) {
 }
 
 // ── Top Misses Table ─────────────────────────────────────────────────────────
-function TopMissesTable({ misses, onSelect }: { misses: TopMiss[]; onSelect: (start: string) => void }) {
+function TopMissesTable({ misses, cutoff, onSelect }: { misses: TopMiss[]; cutoff: string; onSelect: (start: string) => void }) {
   return (
     <div className="table-container">
       <table className="data-table" aria-label="Top 10 forecast misses by absolute error">
         <thead>
           <tr>
-            <th>Interval (London)</th>
+            <th>Delivery Interval (London)</th>
             <th className="num">Forecast (MW)</th>
             <th className="num">Actual (MW)</th>
             <th className="num">Error (MW)</th>
-            <th>Vintage Published</th>
+            <th>Forecast Published (UTC)</th>
+            <th>Auction Cutoff</th>
             <th>Action</th>
           </tr>
         </thead>
@@ -346,6 +347,7 @@ function TopMissesTable({ misses, onSelect }: { misses: TopMiss[]; onSelect: (st
                 {m.error > 0 ? '+' : ''}{m.error.toLocaleString('en-GB')}
               </td>
               <td style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{formatDateTime(m.publish_time)}</td>
+              <td style={{ color: '#ffffff', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{cutoff} London D−1</td>
               <td><span className="badge badge-outline">Inspect →</span></td>
             </tr>
           ))}
@@ -364,18 +366,19 @@ function IntervalDetail({ start, cutoff }: { start: string; cutoff: string }) {
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-        <span>Interval: <strong style={{ color: '#ffffff' }}>{shortLabel(data.start)}</strong> (London)</span>
-        <span>Cutoff: <strong style={{ color: '#ffffff', fontFamily: 'var(--font-mono)' }}>{formatDateTime(data.cutoff_utc)}</strong> UTC</span>
+      <div style={{ display: 'flex', gap: 24, flexWrap: 'wrap', marginBottom: 14, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+        <span>Delivery Interval: <strong style={{ color: '#ffffff' }}>{shortLabel(data.start)}</strong> (London)</span>
+        <span>Decision Cutoff: <strong style={{ color: '#ffffff', fontFamily: 'var(--font-mono)' }}>{formatDateTime(data.cutoff_utc)}</strong> UTC ({cutoff} London D−1)</span>
         <span>Outturn Actual: <strong style={{ color: '#ffffff' }}>{data.actual !== null ? formatMW(data.actual) : '—'}</strong></span>
       </div>
       <div className="table-container">
         <table className="data-table" aria-label={`All forecast vintages for interval ${shortLabel(data.start)}`}>
           <thead>
             <tr>
-              <th>Published at (UTC)</th>
+              <th>Forecast Publication Time (UTC)</th>
+              <th>Decision Cutoff Deadline (UTC)</th>
               <th className="num">Generation (MW)</th>
-              <th>Availability Status</th>
+              <th>Auction Availability</th>
               <th>Selection Decision</th>
             </tr>
           </thead>
@@ -386,8 +389,9 @@ function IntervalDetail({ start, cutoff }: { start: string; cutoff: string }) {
                 className={v.chosen ? 'vintage-row-chosen' : v.eligible ? '' : 'vintage-row-ineligible'}
               >
                 <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{formatDateTime(v.publish_time)}</td>
+                <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--text-muted)' }}>{formatDateTime(data.cutoff_utc)}</td>
                 <td className="num">{v.generation.toLocaleString('en-GB')}</td>
-                <td>{v.eligible ? <span className="badge badge-outline">Eligible (Pre-cutoff)</span> : <span className="badge badge-muted">Post-Cutoff (Hindsight)</span>}</td>
+                <td>{v.eligible ? <span className="badge badge-outline">Available Pre-Cutoff</span> : <span className="badge badge-muted">Unavailable (At/Post Cutoff)</span>}</td>
                 <td>{v.chosen ? <span className="badge badge-white">✓ Chosen Decision Vintage</span> : '—'}</td>
               </tr>
             ))}
@@ -395,7 +399,7 @@ function IntervalDetail({ start, cutoff }: { start: string; cutoff: string }) {
         </table>
       </div>
       <div style={{ marginTop: 10, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        Strict-before rule enforces <code style={{ color: '#ffffff' }}>publishTime &lt; cutoff</code>. Only vintages released before gate closure are eligible for purchase decisions.
+        Strict-before rule enforces <code style={{ color: '#ffffff' }}>publishTime &lt; cutoff</code>. Only forecast vintages published strictly prior to the auction order book gate closure ({cutoff} London) were genuinely available for bidding decisions.
       </div>
     </div>
   )
@@ -407,7 +411,7 @@ function MethodologyPanel({ data }: { data: AnalysisResponse }) {
   return (
     <details className="method-panel">
       <summary className="method-summary">
-        <span>Methodology, Quality Audit &amp; Data Contract</span>
+        <span>Methodology, Defensible Cutoff Rule &amp; Calculation Reconciliation</span>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
           {data.coverage.coverage_pct.toFixed(1)}% coverage · {q.warnings.length} warnings
         </span>
@@ -420,34 +424,35 @@ function MethodologyPanel({ data }: { data: AnalysisResponse }) {
               <li>Delivery dates: 2 January – 1 February 2026 (GB Market).</li>
               <li>Decision cutoff: D−1 at {data.cutoff.time} London.</li>
               <li>Expected intervals: 31 days × 48 settlement periods = 1,488 half-hours.</li>
-              <li>Settlement Period indexing: 01:00–01:30 UTC corresponds to Settlement Period 3.</li>
+              <li>Settlement Period indexing: 01:00–01:30 UTC corresponds to <strong>Settlement Period 3</strong> (confirmed via raw FUELHH record).</li>
               <li>Data sources: Elexon BMRS <code style={{ color: '#fff' }}>FUELHH</code> (Actuals) and <code style={{ color: '#fff' }}>WINDFOR</code> (Vintages).</li>
             </ul>
           </div>
           <div className="method-section">
-            <h4>Strict-Before Anti-Hindsight Selection Rule</h4>
+            <h4>Defensible Strict-Before Selection Rule (<code style={{ color: '#fff' }}>publishTime &lt; cutoff</code>)</h4>
             <div className="method-code">{`for each delivery interval T:
   cutoff = London(date(T) - 1 day, ${data.cutoff.time})
   eligible = WINDFOR[startTime == T ∧ publishTime < cutoff]
   chosen = max(publishTime) among eligible
   error = forecast - actual`}</div>
+            <p style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+              A forecast published at exactly 15:30:00 cannot be ingested, normalized, and traded before gate closure closes at 15:30:00. Strict-before selection ensures that all selected vintages were genuinely available before auction deadlines.
+            </p>
           </div>
           <div className="method-section">
-            <h4>Statistical Error Metrics (N={data.metrics.n} Matched)</h4>
+            <h4>Calculation Reconciliation (Authoritative Values)</h4>
             <ul>
-              <li>MAE — Mean Absolute Error (typical magnitude of volume miss).</li>
-              <li>RMSE — Root Mean Square Error (quadratic penalty for extreme deviations).</li>
-              <li>MBE — Mean Bias Error (+ve = over-forecast, wind under-delivered).</li>
-              <li>WAPE — Weighted Absolute Percentage Error ({formatPct(data.metrics.wape_pct)}).</li>
-              <li>P5 / P95 — Empirical non-parametric quantiles for volume buffer dimensioning.</li>
+              <li><strong>Authoritative Strict-Before (`&lt;`):</strong> MAE = <strong>1,907 MW</strong> (1,906.6 MW), RMSE = <strong>2,366 MW</strong> (2,365.7 MW), MBE = <strong>+1,692 MW</strong>, P95 = <strong>+4,523 MW</strong>.</li>
+              <li><strong>Legacy Inclusive (`&le;`):</strong> MAE was 1,877 MW, RMSE was 2,331 MW. The difference is caused by excluding the 15:30:00 forecast files which were timestamped at the exact auction deadline.</li>
+              <li>WAPE = <strong>16.90%</strong> (volume-weighted relative error across all 1,488 intervals).</li>
             </ul>
           </div>
           <div className="method-section">
-            <h4>Day-Ahead Market Context &amp; Assumptions</h4>
+            <h4>Risk Planning Interpretation &amp; Market Context</h4>
             <ul>
+              <li><strong>Empirical P95 (+4,523 MW):</strong> Informs risk planning and volume sizing; does not guarantee sufficient backup capacity or eliminate portfolio financial exposure.</li>
               <li><strong>EPEX GB Day-Ahead (15:30):</strong> Half-hourly auction closing at 15:30 London.</li>
               <li><strong>N2EX Day-Ahead (09:50):</strong> Hourly auction product closing at 09:50 GMT.</li>
-              <li>Empirical P95 error represents historical volume overshoot, not a guaranteed hedge requirement.</li>
               <li>National aggregate wind only; portfolio balancing requires local position &amp; price data.</li>
             </ul>
           </div>
@@ -525,7 +530,6 @@ export default function App() {
                 src="/logo.png"
                 alt="Cutoff Analytics Brand Mark"
                 onError={e => {
-                  // Fallback geometric mark if external asset missing
                   (e.target as HTMLElement).style.display = 'none'
                 }}
               />
@@ -555,7 +559,7 @@ export default function App() {
 
           <div className="header-controls">
             <div className="select-wrapper">
-              <label className="select-label" htmlFor="cutoff-select">Cutoff (D−1):</label>
+              <label className="select-label" htmlFor="cutoff-select">Decision Cutoff (D−1):</label>
               <select
                 id="cutoff-select"
                 className="select"
@@ -595,35 +599,35 @@ export default function App() {
                     value={m?.mae !== null && m?.mae !== undefined ? Math.round(m.mae).toLocaleString('en-GB') : '—'}
                     unit="MW typical miss"
                     isWhite={true}
-                    tooltip="Average magnitude of forecast error across all matched half-hours in January 2026."
+                    tooltip="Average magnitude of forecast error across all 1,488 matched half-hours in January 2026 under strict-before selection."
                   />
                   <Kpi
                     label="Root Mean Square (RMSE)"
                     value={m?.rmse !== null && m?.rmse !== undefined ? Math.round(m.rmse).toLocaleString('en-GB') : '—'}
                     unit="MW quadratic miss"
                     isWhite={false}
-                    tooltip="Heavily penalizes extreme forecast errors. Useful for volatility assessment."
+                    tooltip="Penalizes large misses more than MAE. Highlights extreme forecast swings during wind ramp events."
                   />
                   <Kpi
                     label="Mean Bias Error (MBE)"
                     value={m?.mbe !== null && m?.mbe !== undefined ? `${m.mbe > 0 ? '+' : ''}${Math.round(m.mbe).toLocaleString('en-GB')}` : '—'}
-                    unit="MW over-forecast"
+                    unit="MW over-forecast bias"
                     isWhite={true}
-                    tooltip="Positive bias indicates systematic over-forecast (wind under-delivered; market buyer short)."
+                    tooltip="Systemic over-forecast: wind persistently under-delivered by an average of +1,692 MW, leaving Day-Ahead buyers short."
                   />
                   <Kpi
                     label="Empirical P95 Over-Forecast"
                     value={m?.p95_error !== null && m?.p95_error !== undefined ? `+${Math.round(m.p95_error).toLocaleString('en-GB')}` : '—'}
-                    unit="MW hedge buffer quantile"
+                    unit="95th percentile of historical error"
                     isWhite={true}
-                    tooltip="95% of half-hours overshot by less than this amount. Informs operational reserve sizing."
+                    tooltip="Informs risk planning and downside volume sizing; does not guarantee sufficient backup capacity. In 95% of half-hours, wind undershot forecast by less than +4,523 MW."
                   />
                   <Kpi
                     label="Market Coverage"
                     value={formatPct(data.coverage.coverage_pct)}
                     unit={`${data.coverage.matched} / ${data.coverage.expected} intervals`}
                     isWhite={false}
-                    tooltip="100% complete coverage of all 1,488 settlement half-hours in January 2026."
+                    tooltip="100% complete coverage across all 1,488 settlement half-hours of January 2026."
                   />
                 </div>
               </section>
@@ -635,11 +639,11 @@ export default function App() {
                     <div>
                       <div className="card-title" id="forecast-heading">Forecast vs Actual Generation</div>
                       <div className="card-subtitle">
-                        Half-hourly time series of outturn actual generation vs. latest pre-cutoff forecast vintage. Click any point to inspect all published vintages.
+                        Half-hourly time series of outturn actual generation vs. latest pre-cutoff forecast vintage. Click any point to inspect all published candidate vintages.
                       </div>
                     </div>
                     <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                      Cutoff: <strong style={{ color: '#ffffff' }}>{cutoff}</strong> London · WAPE: <strong style={{ color: '#ffffff' }}>{formatPct(m?.wape_pct)}</strong>
+                      Decision Cutoff: <strong style={{ color: '#ffffff' }}>{cutoff}</strong> London (D−1) · WAPE: <strong style={{ color: '#ffffff' }}>{formatPct(m?.wape_pct)}</strong>
                     </div>
                   </div>
                   <ForecastActualChart intervals={data.intervals} onSelectInterval={handleSelectInterval} />
@@ -663,9 +667,9 @@ export default function App() {
                 <div className="card">
                   <div className="card-header">
                     <div>
-                      <div className="card-title">Error Distribution &amp; Quantiles</div>
+                      <div className="card-title">Error Distribution &amp; Risk Quantiles</div>
                       <div className="card-subtitle">
-                        P5 = {formatSignedMW(m?.p5_error)} · Bias (MBE) = {formatSignedMW(m?.mbe)} · P95 = {formatSignedMW(m?.p95_error)}
+                        P5 = {formatSignedMW(m?.p5_error)} · Bias (MBE) = {formatSignedMW(m?.mbe)} · P95 = {formatSignedMW(m?.p95_error)} (95th percentile of historical error, informing risk planning)
                       </div>
                     </div>
                   </div>
@@ -685,7 +689,7 @@ export default function App() {
                       <div className="card-subtitle">
                         {selectedStart
                           ? `Inspecting interval ${shortLabel(selectedStart)} London — showing all candidate forecast publication vintages`
-                          : 'Select an interval from the Forecast chart or Top 10 Misses below to inspect all available forecast publication vintages'}
+                          : 'Select an interval from the Forecast chart or Top 10 Misses below to inspect all candidate forecast publication vintages'}
                       </div>
                     </div>
                     {selectedStart && (
@@ -713,7 +717,7 @@ export default function App() {
                       <div className="card-subtitle">Extreme absolute error intervals during January 2026. Select any row to audit decision vintages.</div>
                     </div>
                   </div>
-                  <TopMissesTable misses={data.top_misses} onSelect={handleSelectInterval} />
+                  <TopMissesTable misses={data.top_misses} cutoff={cutoff} onSelect={handleSelectInterval} />
                 </div>
               </section>
 
@@ -730,7 +734,7 @@ export default function App() {
           <strong>Cutoff Energy Analytics</strong> · GB Day-Ahead Wind Forecast Accuracy Portal · January 2026 Elexon Dataset
         </div>
         <div>
-          Strict Anti-Hindsight Selection (<code style={{ color: '#fff' }}>publishTime &lt; cutoff</code>) · Times in Europe/London
+          Strict Anti-Hindsight Selection (<code style={{ color: '#fff' }}>publishTime &lt; cutoff</code>) · All times in Europe/London
         </div>
       </footer>
 

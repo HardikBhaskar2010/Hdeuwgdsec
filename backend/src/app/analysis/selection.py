@@ -12,7 +12,7 @@ Invariant checked at runtime:
     chosen.publishTime < cutoff(T) for every matched row (strict-before)
 
 Pure function: no I/O, no FastAPI imports.
-Optimized via indexed grouped lookup (python-performance-optimization).
+High-performance implementation using pd.DatetimeIndex bisection (python-performance-optimization).
 """
 
 from __future__ import annotations
@@ -92,12 +92,16 @@ def select_forecasts(
             sp_val = getattr(row, "settlementPeriod", None)
             fuelhh_dict[st] = (float(mw) if mw is not None else None, sp_val)
 
-    # Group WINDFOR by startTime once, sorted by publishTime (O(N log N) pre-sort, O(1) per group)
+    # Group WINDFOR by startTime once, sorted by publishTime
+    # Store DatetimeIndex and numpy array for fast searchsorted bisection
+    wf_dict: dict[pd.Timestamp, tuple[pd.DatetimeIndex, np.ndarray]] = {}
     if not windfor.empty:
         windfor_sorted = windfor.sort_values(["startTime", "publishTime"])
-        wf_groups = {k: v for k, v in windfor_sorted.groupby("startTime")}
-    else:
-        wf_groups = {}
+        for start_t, grp in windfor_sorted.groupby("startTime"):
+            wf_dict[pd.Timestamp(start_t)] = (
+                pd.DatetimeIndex(grp["publishTime"]),
+                grp["forecast_mw"].to_numpy(dtype=float),
+            )
 
     rows = []
     for T in expected:
@@ -110,8 +114,8 @@ def select_forecasts(
             except (TypeError, ValueError):
                 sp = None
 
-        vintages = wf_groups.get(pd.Timestamp(T))
-        if vintages is None or vintages.empty:
+        entry = wf_dict.get(pd.Timestamp(T))
+        if entry is None:
             rows.append({
                 "start_utc": T,
                 "forecast_mw": None,
@@ -125,9 +129,12 @@ def select_forecasts(
             })
             continue
 
-        # Fast filtering: publishTime < cutoff (strict-before)
-        eligible = vintages[vintages["publishTime"] < cutoff_dt]
-        if eligible.empty:
+        dti, fcs = entry
+        # searchsorted side='left' returns index where cutoff_dt would be placed
+        # so all elements before idx are strictly < cutoff_dt
+        idx = int(dti.searchsorted(cutoff_dt, side="left")) - 1
+
+        if idx < 0:
             rows.append({
                 "start_utc": T,
                 "forecast_mw": None,
@@ -141,18 +148,15 @@ def select_forecasts(
             })
             continue
 
-        # Since vintages was pre-sorted by publishTime, eligible is also sorted by publishTime.
-        # The latest eligible vintage is simply the last row (.iloc[-1]).
-        chosen = eligible.iloc[-1]
+        forecast_mw = float(fcs[idx])
+        pub_time = dti[idx]
 
         # Runtime invariant check: must be strictly before cutoff
-        assert chosen["publishTime"] < cutoff_dt, (
-            f"Invariant violated: chosen publishTime {chosen['publishTime']} "
+        assert pub_time < cutoff_dt, (
+            f"Invariant violated: chosen publishTime {pub_time} "
             f"is not strictly before cutoff {cutoff_dt} for T={T}"
         )
 
-        forecast_mw = float(chosen["forecast_mw"])
-        pub_time = chosen["publishTime"]
         lead_hours = (T - pub_time).total_seconds() / 3600.0
 
         if actual_mw is None:

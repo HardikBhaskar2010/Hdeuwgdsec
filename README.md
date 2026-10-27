@@ -189,12 +189,25 @@ $$\text{Error} = \text{Forecast} - \text{Actual}$$
 - **Positive Error ($> 0$):** Over-forecast. Wind failed to deliver; buyer is **short** relative to expected wind.
 - **Negative Error ($< 0$):** Under-forecast. Wind exceeded expectation; buyer is **long**.
 
-### 7.3 Metric Definitions
+### 7.3 Metric Definitions & Interpretation
 - **MAE:** Mean Absolute Error $\frac{1}{N}\sum |e_i|$ (Average miss magnitude).
-- **RMSE:** Root Mean Squared Error $\sqrt{\frac{1}{N}\sum e_i^2}$ (Penalizes volatile swings).
-- **MBE (Bias):** Mean Bias Error $\frac{1}{N}\sum e_i$ (Detects systemic bias).
-- **WAPE:** Weighted Absolute Percentage Error $\frac{\sum |e_i|}{\sum A_i} \times 100\%$ (Volume-weighted relative error; avoids dividing by zero actuals).
-- **P5 / P95:** Empirical 5th and 95th percentiles of signed error (quantifies the historical distribution tail; informs reserve buffer dimensioning).
+- **RMSE:** Root Mean Squared Error $\sqrt{\frac{1}{N}\sum e_i^2}$ (Quadratic penalty for extreme swings).
+- **MBE (Bias):** Mean Bias Error $\frac{1}{N}\sum e_i$ (Detects systemic bias; positive = over-forecast).
+- **WAPE:** Weighted Absolute Percentage Error $\frac{\sum |e_i|}{\sum A_i} \times 100\%$ (Volume-weighted relative error; 16.90% across full month).
+- **Empirical P95 Error (+4,523 MW):** The **95th percentile of historical forecast error**. Informs volumetric risk planning and scenario sizing; it does **not** guarantee sufficient backup capacity or insulate a commercial portfolio from financial cash-out imbalance exposure.
+
+### 7.4 Calculation Reconciliation & Defensible Cutoff Rule
+A key methodological audit was performed reconciling preliminary prototype metrics with final production figures:
+- **Authoritative Production Calculation (Strict-Before `publishTime < cutoff`):**
+  - **MAE:** **1,906.6 MW** (Display: **1,907 MW**)
+  - **RMSE:** **2,365.7 MW** (Display: **2,366 MW**)
+  - **MBE:** **+1,692.5 MW** (Display: **+1,692 MW**)
+  - **P95:** **+4,523.4 MW** (Display: **+4,523 MW**)
+  - **WAPE:** **16.90%**
+- **Legacy Prototype Calculation (Inclusive `publishTime <= cutoff`):**
+  - Preliminary runs reported MAE 1,877.1 MW and RMSE 2,331.2 MW.
+  - **Why the difference?** The legacy prototype permitted forecasts timestamped *at* `15:30:00 UTC` to be chosen. In reality, the EPEX GB auction order book closes strictly at 15:30:00 London. A forecast released at 15:30:00 cannot realistically be ingested, priced, and traded before gate closure occurs.
+  - Enforcing strict `< 15:30:00` selection ensures that every selected vintage was genuinely available prior to the auction deadline, making the methodology defensible and establishing **MAE 1,907 MW** and **RMSE 2,366 MW** as the authoritative truth.
 
 ---
 
