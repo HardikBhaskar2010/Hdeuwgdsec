@@ -129,20 +129,23 @@ Frontend runs on [http://localhost:5173](http://localhost:5173).
 
 ## 5. Methodology & Mathematical Rigour
 
-### 5.1 Anti-Hindsight Selection Rule
+### 5.1 Anti-Hindsight Selection Rule (Strict-Before)
+In wholesale electricity trading, auction order books close strictly at the designated gate closure minute. A forecast timestamped with the exact gate closure minute (e.g. `15:30:00`) cannot realistically be downloaded, processed through valuation and risk models, and submitted as an order before gate closure occurs.
+
+To guarantee zero hindsight leakage:
 For each delivery half-hour settlement interval $T$:
 1. Derive the decision date: $D_{\text{decision}} = \text{local\_date}(T) - 1\text{ day}$ in `Europe/London` calendar time.
 2. Build the cutoff: $T_{\text{cutoff}} = D_{\text{decision}} \text{ at HH:MM}$ (e.g. `15:30:00 Europe/London`).
-3. Filter available forecasts:
-   $$\text{Eligible} = \{ f \in \text{WINDFOR} \mid f.\text{startTime} = T \land f.\text{publishTime} \le T_{\text{cutoff}} \}$$
+3. Filter available forecasts with **strict-before** semantics:
+   $$\text{Eligible} = \{ f \in \text{WINDFOR} \mid f.\text{startTime} = T \land f.\text{publishTime} < T_{\text{cutoff}} \}$$
 4. Choose the latest eligible vintage:
    $$f^*(T) = \arg\max_{f \in \text{Eligible}} (f.\text{publishTime})$$
 
-*Any forecast published after the cutoff time is strictly rejected to prevent hindsight bias.*
+*Any forecast published at or after the cutoff time is strictly rejected to prevent hindsight bias.*
 
 ### 5.2 Error Sign Convention
 $$\text{Error} = \text{Forecast} - \text{Actual}$$
-- **Positive Error ($> 0$):** Over-forecast. Wind failed to deliver; buyer is **short**.
+- **Positive Error ($> 0$):** Over-forecast. Wind failed to deliver; buyer is **short** relative to expected wind.
 - **Negative Error ($< 0$):** Under-forecast. Wind exceeded expectation; buyer is **long**.
 
 ### 5.3 Metric Definitions
@@ -150,23 +153,25 @@ $$\text{Error} = \text{Forecast} - \text{Actual}$$
 - **RMSE:** Root Mean Squared Error $\sqrt{\frac{1}{N}\sum e_i^2}$ (Penalizes volatile swings).
 - **MBE (Bias):** Mean Bias Error $\frac{1}{N}\sum e_i$ (Detects systemic bias).
 - **WAPE:** Weighted Absolute Percentage Error $\frac{\sum |e_i|}{\sum A_i} \times 100\%$ (Volume-weighted relative error; avoids dividing by zero actuals).
-- **P5 / P95:** 5th and 95th percentiles of signed error (The 90% confidence reserve buffer).
+- **P5 / P95:** Empirical 5th and 95th percentiles of signed error (quantifies the historical distribution tail; not a prescriptive reserve mandate).
 
 ---
 
-## 6. January 2026 Key Market Findings
+## 6. January 2026 Key Market Findings (Forecast Sensitivity)
 
-| Metric | 15:30 Cutoff (Day-Ahead Auction) | 09:50 Cutoff (N2EX Gate Closure) | Variance ($\Delta$) | Trading Insight |
+*Note: 15:30 aligns with EPEX SPOT GB half-hourly auction, and 09:50 aligns with Nord Pool N2EX hourly auction gate closure. These are distinct products; this comparison examines forecast accuracy sensitivity to decision lead time.*
+
+| Metric | 15:30 Cutoff (Strict `<`) | 09:50 Cutoff (Strict `<`) | Variance ($\Delta$) | Forecast Sensitivity Insight |
 |---|---:|---:|---:|---|
 | **Coverage** | 100% (1,488 / 1,488) | 100% (1,488 / 1,488) | 0 | Full month sample integrity |
-| **MAE** | 1,877.1 MW | 2,016.3 MW | **+139.2 MW** | Earlier deadline increases error |
-| **RMSE** | 2,331.2 MW | 2,510.3 MW | **+179.1 MW** | Increased volatility |
-| **Bias (MBE)** | +1,709.2 MW | +1,729.9 MW | **+20.7 MW** | **Persistent over-forecasting** |
-| **WAPE** | 16.64% | 17.87% | **+1.23%** | Scale-free error grows by 1.2% |
-| **P95 Shortfall** | **+4,535.0 MW** | **+5,346.6 MW** | **+811.6 MW** | **09:50 bidders need +812 MW more backup** |
+| **MAE** | 1,906.6 MW | 2,016.3 MW | **+109.7 MW** | Earlier deadline increases error |
+| **RMSE** | 2,365.7 MW | 2,510.3 MW | **+144.6 MW** | Increased volatility at longer horizons |
+| **Bias (MBE)** | +1,692.5 MW | +1,729.9 MW | **+37.4 MW** | **Persistent over-forecasting** |
+| **WAPE** | 16.90% | 17.87% | **+0.97%** | Scale-free error grows by ~1% |
+| **Empirical P95** | **+4,523.4 MW** | **+5,346.6 MW** | **+823.2 MW** | **95th percentile over-forecast error expands by ~823 MW** |
 
-### The January 12 Extreme Shortfall Event
-On January 12, 2026 at Settlement Period 2 (01:00 UTC), D-1 forecast was `21,145 MW` but actual outturn wind was only `14,048 MW` — resulting in a **+7,097 MW shortfall**. This underscores why power buyers must base their reserve sizing on the **P95 error quantile** rather than simple MAE.
+### The January 12 Discrepancy Event
+On January 12, 2026 at **Settlement Period 3** (01:00–01:30 UTC; verified in raw `FUELHH` record `settlementPeriod == 3`), the latest pre-cutoff forecast available strictly before 15:30 was `20,933 MW` (published 11:30:00 UTC) while actual outturn wind was `14,048 MW` — resulting in a **+6,885 MW over-forecast**. (Under an inclusive $\le 15:30$ rule that accepts the 15:30:00 publication, forecast was `21,145 MW` with `+7,097 MW` error). This dataset records the generation shortfall; physical atmospheric causes cannot be attributed from generation numbers alone.
 
 ---
 

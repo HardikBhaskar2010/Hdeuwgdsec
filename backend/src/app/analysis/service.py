@@ -55,7 +55,7 @@ def build_analysis(
         "cutoff": {
             "time": cutoff_hhmm,
             "timezone": "Europe/London",
-            "rule": "latest forecast with publishTime <= cutoff on day before delivery",
+            "rule": "latest forecast with publishTime < cutoff on day before delivery (strict-before)",
         },
         "metrics": result["metrics"],
         "coverage": result["coverage"],
@@ -100,14 +100,14 @@ def get_interval_detail(
     actual_row = fuelhh[fuelhh["startTime"] == T]
     actual_mw = float(actual_row["actual_mw"].iloc[0]) if not actual_row.empty else None
 
-    # Eligible = publishTime <= cutoff
-    eligible_mask = vintages_df["publishTime"] <= pd.Timestamp(cutoff_dt)
+    # Eligible = publishTime < cutoff (strict-before)
+    eligible_mask = vintages_df["publishTime"] < pd.Timestamp(cutoff_dt)
     eligible_vintages = vintages_df[eligible_mask]
     chosen_pub = eligible_vintages["publishTime"].max() if not eligible_vintages.empty else None
 
     vintages = []
     for _, row in vintages_df.iterrows():
-        eligible = bool(row["publishTime"] <= pd.Timestamp(cutoff_dt))
+        eligible = bool(row["publishTime"] < pd.Timestamp(cutoff_dt))
         chosen = eligible and (chosen_pub is not None) and (row["publishTime"] == chosen_pub)
         vintages.append({
             "publish_time": row["publishTime"].isoformat(),

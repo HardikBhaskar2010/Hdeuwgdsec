@@ -62,13 +62,14 @@ class TestSelectForecasts:
         return fh, wf
 
     def test_picks_latest_eligible(self):
-        """Selects the vintage with the latest publishTime <= cutoff."""
+        """Selects the vintage with the latest publishTime < cutoff (strict-before)."""
         T = "2026-01-02T00:00:00Z"
         # cutoff 15:30 London on 1 Jan = 15:30 UTC
-        # Vintage at 14:00 (eligible), 15:30 (eligible, at cutoff), 16:00 (ineligible)
+        # Vintage at 14:00 (eligible), 15:29 (eligible, latest), 15:30 (ineligible, at cutoff), 16:00 (ineligible)
         fh, wf = self._minimal_frames(T, 10000.0, [
             ("2026-01-01T14:00:00Z", 9000.0),
-            ("2026-01-01T15:30:00Z", 9500.0),  # latest eligible
+            ("2026-01-01T15:29:00Z", 9500.0),  # latest strictly before cutoff
+            ("2026-01-01T15:30:00Z", 9700.0),  # at cutoff timestamp, must NOT be chosen
             ("2026-01-01T16:00:00Z", 9800.0),  # post-cutoff, must NOT be chosen
         ])
         result = select_forecasts(fh, wf, "15:30")
@@ -76,16 +77,17 @@ class TestSelectForecasts:
         assert len(matched) == 1
         row = matched.iloc[0]
         assert row["forecast_mw"] == pytest.approx(9500.0)
-        assert row["publish_time"] == pd.Timestamp("2026-01-01T15:30:00Z", tz="UTC")
+        assert row["publish_time"] == pd.Timestamp("2026-01-01T15:29:00Z", tz="UTC")
 
-    def test_exactly_at_cutoff_is_eligible(self):
-        """A forecast published exactly at the cutoff time is eligible (<=)."""
+    def test_exactly_at_cutoff_is_ineligible(self):
+        """A forecast published exactly at the cutoff timestamp is ineligible (< strict-before)."""
         T = "2026-01-02T00:00:00Z"
         fh, wf = self._minimal_frames(T, 10000.0, [
             ("2026-01-01T15:30:00Z", 9900.0),  # exactly at cutoff
         ])
         result = select_forecasts(fh, wf, "15:30")
-        assert result[result["status"] == "MATCHED"].iloc[0]["forecast_mw"] == pytest.approx(9900.0)
+        row = result.iloc[0]
+        assert row["status"] == "NO_FORECAST"
 
     def test_post_cutoff_rejected(self):
         """A forecast published after the cutoff is rejected, even if newest overall."""
@@ -122,7 +124,7 @@ class TestSelectForecasts:
         assert row["actual_mw"] is None
 
     def test_invariant_holds(self):
-        """chosen.publishTime <= cutoff(T) for every MATCHED row."""
+        """chosen.publishTime < cutoff(T) for every MATCHED row (strict-before)."""
         T = "2026-01-02T00:00:00Z"
         fh, wf = self._minimal_frames(T, 10000.0, [
             ("2026-01-01T10:00:00Z", 8000.0),
@@ -131,7 +133,7 @@ class TestSelectForecasts:
         result = select_forecasts(fh, wf, "15:30")
         matched = result[result["status"] == "MATCHED"]
         for _, row in matched.iterrows():
-            assert row["publish_time"] <= row["cutoff_utc"]
+            assert row["publish_time"] < row["cutoff_utc"]
 
     def test_error_sign(self):
         """error = forecast - actual (D6 convention)."""

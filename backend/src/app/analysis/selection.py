@@ -4,12 +4,12 @@ Selects the forecast vintage available at decision-cutoff time for each delivery
 
 Selection rule (docs/02-methodology.md, D4):
     For each delivery interval T:
-        eligible = WINDFOR rows where startTime == T AND publishTime <= cutoff(T)
+        eligible = WINDFOR rows where startTime == T AND publishTime < cutoff(T)
         chosen   = row with max(publishTime) among eligible
         status   = MATCHED | NO_FORECAST | NO_ACTUAL
 
 Invariant checked at runtime:
-    chosen.publishTime <= cutoff(T) for every matched row
+    chosen.publishTime < cutoff(T) for every matched row (strict-before)
 
 Pure function: no I/O, no FastAPI imports.
 """
@@ -90,8 +90,9 @@ def select_forecasts(
     for T in expected:
         cutoff_dt = cutoff_utc(T, cutoff_hhmm)
 
-        # Select eligible vintages: startTime == T, publishTime <= cutoff
-        mask = (windfor["startTime"] == T) & (windfor["publishTime"] <= cutoff_dt)
+        # Select eligible vintages: startTime == T, publishTime < cutoff (strict-before
+        # to ensure the forecast was published and available before market gate closure)
+        mask = (windfor["startTime"] == T) & (windfor["publishTime"] < cutoff_dt)
         eligible = windfor[mask]
 
         # Actual
@@ -122,13 +123,13 @@ def select_forecasts(
             })
             continue
 
-        # Pick the latest publishTime (most recent at decision time)
+        # Pick the latest publishTime (most recent prior to decision time)
         chosen = eligible.loc[eligible["publishTime"].idxmax()]
 
-        # Runtime invariant check
-        assert chosen["publishTime"] <= cutoff_dt, (
+        # Runtime invariant check: must be strictly before cutoff
+        assert chosen["publishTime"] < cutoff_dt, (
             f"Invariant violated: chosen publishTime {chosen['publishTime']} "
-            f"> cutoff {cutoff_dt} for T={T}"
+            f"is not strictly before cutoff {cutoff_dt} for T={T}"
         )
 
         forecast_mw = float(chosen["forecast_mw"])
