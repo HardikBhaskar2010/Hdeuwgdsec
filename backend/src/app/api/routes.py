@@ -1,7 +1,13 @@
-"""API routes for the Wind Forecast Accuracy backend."""
+"""API routes for the Wind Forecast Accuracy backend.
+
+Enhanced using async-python-patterns:
+- Offloads CPU-bound DataFrame computation to asyncio.to_thread to maintain non-blocking event loop.
+- Adds Request-ID traceability and execution timing headers.
+"""
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import time
 import uuid
@@ -77,14 +83,16 @@ async def analysis(
     logger.info(f"[{req_id}] GET /analysis cutoff={cutoff}")
 
     try:
-        result = state.get_analysis(cutoff)
+        # Offload CPU work with asyncio.to_thread to keep the event loop non-blocking
+        result = await asyncio.to_thread(state.get_analysis, cutoff)
     except Exception as e:
         logger.error(f"[{req_id}] Analysis failed: {e}")
         raise HTTPException(status_code=500, detail={"error": {"code": "ANALYSIS_ERROR", "message": str(e)}})
 
     elapsed = time.monotonic() - t0
-    logger.info(f"[{req_id}] completed in {elapsed:.2f}s")
+    logger.info(f"[{req_id}] completed in {elapsed:.4f}s")
     response.headers["X-Request-ID"] = req_id
+    response.headers["X-Compute-Time-Seconds"] = f"{elapsed:.4f}"
     return result
 
 
@@ -92,6 +100,7 @@ async def analysis(
 async def interval_detail(
     start_iso: str,
     request: Request,
+    response: Response,
     cutoff: str = Query(default="15:30"),
 ):
     state = request.app.state
@@ -110,7 +119,9 @@ async def interval_detail(
 
     from app.analysis.service import get_interval_detail  # noqa: PLC0415
 
-    result = get_interval_detail(
+    # Offload interval slicing to thread
+    result = await asyncio.to_thread(
+        get_interval_detail,
         state.windfor_aligned,
         state.norm.fuelhh,
         start_iso,

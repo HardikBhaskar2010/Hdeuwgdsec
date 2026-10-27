@@ -23,7 +23,7 @@ This section tracks actual project progress against the 16-hour execution specif
 | **Phase 6: Video & Submit** | 3.0 h | Part 1 (pitch $\le$ 5 min) + Part 2 (tech $\le$ 5 min), YouTube unlisted link, form submission. | **25% DONE** | Full rehearsal script and technical talking points prepared. *Pending: Video recording and Microsoft form submission.* |
 
 **Overall Core Engineering Completion:** **100%**  
-**Overall Submission Completion:** **~85%** (Product fully built, verified, and repo refined; remaining items are deployment and video recording).
+**Overall Submission Completion:** **~90%** (Product fully built, verified, strict-before anti-hindsight verified, Deep Black & White Theme deployed, skills installed in root, and repo refined; remaining items are cloud deploy and video recording).
 
 ---
 

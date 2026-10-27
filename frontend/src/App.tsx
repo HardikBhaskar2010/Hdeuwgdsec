@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useAnalysis } from './hooks/useAnalysis'
 import { useInterval } from './hooks/useInterval'
-import { formatDate, formatDateTime, formatMW, formatSignedMW, formatPct, formatTime, shortLabel } from './format'
+import { formatDate, formatDateTime, formatMW, formatSignedMW, formatPct, shortLabel } from './format'
 import type { AnalysisResponse, IntervalRow, TopMiss, VintageRow } from './types'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -9,18 +9,18 @@ import {
 } from 'recharts'
 
 const CUTOFF_PRESETS = [
-  { value: '15:30', label: '15:30 — Day-ahead auction' },
-  { value: '09:50', label: '09:50 — N2EX gate closure' },
+  { value: '15:30', label: '15:30 London — EPEX GB Day-Ahead Auction' },
+  { value: '09:50', label: '09:50 London — N2EX Gate Closure' },
 ]
 
 // ── KPI Component ────────────────────────────────────────────────────────────
-function Kpi({ label, value, unit, tooltip, colorClass = 'kpi-neutral' }: {
-  label: string; value: string; unit?: string; tooltip?: string; colorClass?: string
+function Kpi({ label, value, unit, tooltip, isWhite = false }: {
+  label: string; value: string; unit?: string; tooltip?: string; isWhite?: boolean
 }) {
   return (
     <div className="kpi" role="figure" aria-label={`${label}: ${value}${unit ? ' ' + unit : ''}`}>
       <div className="kpi-label">{label}</div>
-      <div className={`kpi-value ${colorClass}`}>{value}</div>
+      <div className={`kpi-value ${isWhite ? 'kpi-white' : 'kpi-dim'}`}>{value}</div>
       {unit && <div className="kpi-unit">{unit}</div>}
       {tooltip && <div className="kpi-tooltip">{tooltip}</div>}
     </div>
@@ -30,21 +30,21 @@ function Kpi({ label, value, unit, tooltip, colorClass = 'kpi-neutral' }: {
 // ── States ───────────────────────────────────────────────────────────────────
 function LoadingState() {
   return (
-    <div className="state-box">
-      <div className="spinner" aria-label="Loading" />
+    <div className="state-box" aria-live="polite">
+      <div className="spinner" aria-label="Loading analysis" />
       <div className="state-title">Loading analysis…</div>
+      <div className="state-sub">Fetching January 2026 Elexon wind dataset and calculating metrics.</div>
     </div>
   )
 }
 
 function WakingState() {
   return (
-    <div className="state-box">
+    <div className="state-box" aria-live="polite">
       <div className="spinner" aria-label="Waking API" />
       <div className="state-title">Waking the API…</div>
       <div className="state-sub">
-        The backend is on a free-tier host and may take 30–60 seconds to cold-start.
-        Hang tight — your data will be ready shortly.
+        The backend is initializing from cold snapshot. Hang tight — your data will be ready shortly.
       </div>
     </div>
   )
@@ -52,17 +52,19 @@ function WakingState() {
 
 function ErrorState({ error, onRetry }: { error: Error; onRetry: () => void }) {
   return (
-    <div className="state-box">
-      <div className="state-icon" aria-hidden>⚠️</div>
-      <div className="state-title">Could not load data</div>
+    <div className="state-box" role="alert">
+      <div style={{ fontSize: '2rem', marginBottom: '8px' }}>⚠️</div>
+      <div className="state-title">Could not load analysis</div>
       <div className="state-sub">{error.message}</div>
-      <button className="btn-retry" onClick={onRetry}>Retry</button>
+      <button className="btn-primary" onClick={onRetry} style={{ marginTop: '12px' }}>Retry</button>
     </div>
   )
 }
 
-// ── Custom Tooltip for charts ────────────────────────────────────────────────
-function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: { color: string; name: string; value: number | null }[]; label?: string }) {
+// ── Custom Tooltips ──────────────────────────────────────────────────────────
+function ChartTooltip({ active, payload, label }: {
+  active?: boolean; payload?: { color: string; name: string; value: number | null }[]; label?: string
+}) {
   if (!active || !payload?.length) return null
   return (
     <div className="custom-tooltip">
@@ -77,15 +79,17 @@ function ChartTooltip({ active, payload, label }: { active?: boolean; payload?: 
   )
 }
 
-function ErrorTooltip({ active, payload, label }: { active?: boolean; payload?: { value: number | null }[]; label?: string }) {
+function ErrorTooltip({ active, payload, label }: {
+  active?: boolean; payload?: { value: number | null }[]; label?: string
+}) {
   if (!active || !payload?.length) return null
   const val = payload[0]?.value ?? null
   return (
     <div className="custom-tooltip">
       <div className="tt-time">{shortLabel(label ?? '')}</div>
       <div className="tt-row">
-        <span className="tt-label">{val !== null && val > 0 ? 'Over-forecast' : 'Under-forecast'}</span>
-        <span className="tt-val" style={{ color: val !== null && val > 0 ? 'var(--color-over)' : 'var(--color-under)' }}>
+        <span className="tt-label">{val !== null && val > 0 ? 'Over-forecast (Short)' : 'Under-forecast (Surplus)'}</span>
+        <span className="tt-val" style={{ color: '#ffffff' }}>
           {val !== null ? `${val > 0 ? '+' : ''}${Math.round(val).toLocaleString('en-GB')} MW` : '—'}
         </span>
       </div>
@@ -110,43 +114,46 @@ function ForecastActualChart({ intervals, onSelectInterval }: {
   }
 
   return (
-    <div className="chart-wrap" aria-label="Forecast vs Actual wind generation chart. Click a point to drill down.">
-      <ResponsiveContainer width="100%" height={280}>
+    <div className="chart-wrap" aria-label="Forecast vs Actual wind generation chart. Click a point to inspect vintages.">
+      <ResponsiveContainer width="100%" height={290}>
         <LineChart data={data} onClick={handleClick} style={{ cursor: 'pointer' }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" />
+          <CartesianGrid strokeDasharray="3 3" stroke="#252729" />
           <XAxis
             dataKey="start"
-            tickFormatter={(v: string) => { try { return new Date(v).toLocaleString('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: 'short' }) } catch { return v } }}
-            tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+            tickFormatter={(v: string) => {
+              try { return new Date(v).toLocaleString('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: 'short' }) }
+              catch { return v }
+            }}
+            tick={{ fill: '#838788', fontSize: 11 }}
             interval={95}
-            stroke="var(--border)"
+            stroke="#2c2e2f"
           />
           <YAxis
             tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
-            tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-            label={{ value: 'MW', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)', fontSize: 11 }}
-            stroke="var(--border)"
+            tick={{ fill: '#838788', fontSize: 11 }}
+            label={{ value: 'MW', angle: -90, position: 'insideLeft', fill: '#838788', fontSize: 11 }}
+            stroke="#2c2e2f"
           />
           <Tooltip content={<ChartTooltip />} />
           <Legend
-            formatter={(value: string) => <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{value}</span>}
+            formatter={(value: string) => <span style={{ color: '#d1d5db', fontSize: 12 }}>{value}</span>}
           />
           <Line
             type="monotone"
             dataKey="forecast"
-            stroke="var(--color-forecast)"
-            strokeWidth={1.5}
+            stroke="#ffffff"
+            strokeWidth={1.8}
             dot={false}
-            name="Forecast"
+            name="Forecast (D−1 Chosen)"
             connectNulls={false}
           />
           <Line
             type="monotone"
             dataKey="actual"
-            stroke="var(--color-actual)"
-            strokeWidth={1.5}
+            stroke="#717579"
+            strokeWidth={1.8}
             dot={false}
-            name="Actual"
+            name="Actual (Outturn)"
             connectNulls={false}
           />
         </LineChart>
@@ -162,31 +169,33 @@ function ErrorOverTimeChart({ intervals }: { intervals: IntervalRow[] }) {
     .map(iv => ({ start: iv.start, error: iv.error }))
 
   return (
-    <div className="chart-wrap" aria-label="Forecast error over time. Positive = over-forecast (wind under-delivered).">
+    <div className="chart-wrap" aria-label="Forecast error over time. Positive = over-forecast (wind under-delivered; short position).">
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={data} barSize={2}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#252729" vertical={false} />
           <XAxis
             dataKey="start"
-            tickFormatter={(v: string) => { try { return new Date(v).toLocaleString('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: 'short' }) } catch { return v } }}
-            tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
+            tickFormatter={(v: string) => {
+              try { return new Date(v).toLocaleString('en-GB', { timeZone: 'Europe/London', day: '2-digit', month: 'short' }) }
+              catch { return v }
+            }}
+            tick={{ fill: '#838788', fontSize: 11 }}
             interval={95}
-            stroke="var(--border)"
+            stroke="#2c2e2f"
           />
           <YAxis
             tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${(v / 1000).toFixed(1)}k`}
-            tick={{ fill: 'var(--text-muted)', fontSize: 11 }}
-            label={{ value: 'Error MW', angle: -90, position: 'insideLeft', fill: 'var(--text-muted)', fontSize: 11 }}
-            stroke="var(--border)"
+            tick={{ fill: '#838788', fontSize: 11 }}
+            label={{ value: 'Error MW', angle: -90, position: 'insideLeft', fill: '#838788', fontSize: 11 }}
+            stroke="#2c2e2f"
           />
           <Tooltip content={<ErrorTooltip />} />
-          <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="4 2" />
+          <ReferenceLine y={0} stroke="#606367" strokeDasharray="4 2" />
           <Bar dataKey="error" name="Error">
             {data.map((entry, idx) => (
               <Cell
                 key={idx}
-                fill={(entry.error ?? 0) > 0 ? 'var(--color-over)' : 'var(--color-under)'}
-                fillOpacity={0.8}
+                fill={(entry.error ?? 0) > 0 ? '#e5e7eb' : '#4f5254'}
               />
             ))}
           </Bar>
@@ -201,7 +210,7 @@ function ErrorHistogram({ intervals, p5, p95 }: {
   intervals: IntervalRow[]; p5: number | null; p95: number | null
 }) {
   const errors = intervals.filter(iv => iv.error !== null).map(iv => iv.error as number)
-  if (errors.length === 0) return <div className="state-box" style={{ padding: '40px' }}><div className="state-sub">No data</div></div>
+  if (errors.length === 0) return <div className="state-box" style={{ padding: '40px' }}><div className="state-sub">No data available</div></div>
 
   const min = Math.min(...errors)
   const max = Math.max(...errors)
@@ -217,29 +226,29 @@ function ErrorHistogram({ intervals, p5, p95 }: {
   }
 
   return (
-    <div className="chart-wrap" aria-label="Distribution of forecast errors. Vertical lines show P5 and P95 percentiles.">
+    <div className="chart-wrap" aria-label="Error distribution histogram with empirical P5 and P95 hedge buffer lines.">
       <ResponsiveContainer width="100%" height={220}>
         <BarChart data={bins} barSize={12}>
-          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#252729" vertical={false} />
           <XAxis
             dataKey="mid"
             tickFormatter={(v: number) => `${v > 0 ? '+' : ''}${(v / 1000).toFixed(1)}k`}
-            tick={{ fill: 'var(--text-muted)', fontSize: 10 }}
-            stroke="var(--border)"
-            label={{ value: 'Error (MW)', position: 'insideBottom', offset: -4, fill: 'var(--text-muted)', fontSize: 11 }}
+            tick={{ fill: '#838788', fontSize: 10 }}
+            stroke="#2c2e2f"
+            label={{ value: 'Error (MW)', position: 'insideBottom', offset: -4, fill: '#838788', fontSize: 11 }}
           />
-          <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} stroke="var(--border)" />
+          <YAxis tick={{ fill: '#838788', fontSize: 11 }} stroke="#2c2e2f" />
           <Tooltip
             formatter={(val: number) => [val, 'Count']}
             labelFormatter={(v: number) => `Error: ${v > 0 ? '+' : ''}${Math.round(v).toLocaleString('en-GB')} MW`}
-            contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }}
-            labelStyle={{ color: 'var(--text-primary)' }}
-            itemStyle={{ color: 'var(--text-secondary)' }}
+            contentStyle={{ background: '#0a0a0b', border: '1px solid #3d4042', borderRadius: 6, fontSize: 12 }}
+            labelStyle={{ color: '#ffffff' }}
+            itemStyle={{ color: '#d1d5db' }}
           />
-          <ReferenceLine x={0} stroke="var(--text-muted)" strokeDasharray="4 2" />
-          {p5 !== null && <ReferenceLine x={p5} stroke="var(--color-under)" strokeDasharray="4 2" label={{ value: 'P5', fill: 'var(--color-under)', fontSize: 10 }} />}
-          {p95 !== null && <ReferenceLine x={p95} stroke="var(--color-over)" strokeDasharray="4 2" label={{ value: 'P95', fill: 'var(--color-over)', fontSize: 10 }} />}
-          <Bar dataKey="count" fill="var(--accent-blue)" fillOpacity={0.7} />
+          <ReferenceLine x={0} stroke="#606367" strokeDasharray="4 2" />
+          {p5 !== null && <ReferenceLine x={p5} stroke="#717579" strokeDasharray="4 2" label={{ value: 'P5', fill: '#717579', fontSize: 10 }} />}
+          {p95 !== null && <ReferenceLine x={p95} stroke="#ffffff" strokeDasharray="4 2" label={{ value: 'P95', fill: '#ffffff', fontSize: 10 }} />}
+          <Bar dataKey="count" fill="#717579" stroke="#ffffff" strokeWidth={0.5} />
         </BarChart>
       </ResponsiveContainer>
     </div>
@@ -257,7 +266,6 @@ function BreakdownCharts({ data }: { data: AnalysisResponse }) {
   const byLeadData = data.by_lead_time.map(lt => ({
     name: lt.bucket,
     mae: lt.mae,
-    n: lt.n,
   }))
 
   return (
@@ -265,20 +273,20 @@ function BreakdownCharts({ data }: { data: AnalysisResponse }) {
       <div className="card">
         <div className="card-header">
           <div>
-            <div className="card-title">Error by time of day</div>
-            <div className="card-subtitle">MAE and bias per settlement period (30-min slots)</div>
+            <div className="card-title">Error by Settlement Period (Time of Day)</div>
+            <div className="card-subtitle">Mean Absolute Error (MAE) and Mean Bias Error (MBE) across 48 half-hour trading slots</div>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={210}>
           <BarChart data={bySpData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 9 }} interval={5} stroke="var(--border)" />
-            <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} stroke="var(--border)" />
-            <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }} labelStyle={{ color: 'var(--text-primary)' }} itemStyle={{ color: 'var(--text-secondary)' }} />
-            <ReferenceLine y={0} stroke="var(--text-muted)" strokeDasharray="4 2" />
-            <Legend formatter={(v: string) => <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{v}</span>} />
-            <Bar dataKey="mae" name="MAE (MW)" fill="var(--color-forecast)" fillOpacity={0.8} barSize={6} />
-            <Bar dataKey="bias" name="Bias (MW)" fill="var(--color-over)" fillOpacity={0.7} barSize={6} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#252729" vertical={false} />
+            <XAxis dataKey="name" tick={{ fill: '#838788', fontSize: 9 }} interval={5} stroke="#2c2e2f" />
+            <YAxis tick={{ fill: '#838788', fontSize: 10 }} stroke="#2c2e2f" />
+            <Tooltip contentStyle={{ background: '#0a0a0b', border: '1px solid #3d4042', borderRadius: 6, fontSize: 12 }} labelStyle={{ color: '#ffffff' }} itemStyle={{ color: '#d1d5db' }} />
+            <ReferenceLine y={0} stroke="#606367" strokeDasharray="4 2" />
+            <Legend formatter={(v: string) => <span style={{ color: '#d1d5db', fontSize: 11 }}>{v}</span>} />
+            <Bar dataKey="mae" name="MAE (MW)" fill="#ffffff" barSize={6} />
+            <Bar dataKey="bias" name="Bias (MW)" fill="#717579" barSize={6} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -286,18 +294,18 @@ function BreakdownCharts({ data }: { data: AnalysisResponse }) {
       <div className="card">
         <div className="card-header">
           <div>
-            <div className="card-title">Error by forecast lead time</div>
-            <div className="card-subtitle">How stale was the chosen vintage?</div>
+            <div className="card-title">Error by Forecast Lead Time</div>
+            <div className="card-subtitle">MAE grouped by vintage age (how many hours elapsed between publication and delivery)</div>
           </div>
         </div>
-        <ResponsiveContainer width="100%" height={200}>
+        <ResponsiveContainer width="100%" height={210}>
           <BarChart data={byLeadData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="var(--border-light)" vertical={false} />
-            <XAxis dataKey="name" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} stroke="var(--border)" />
-            <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} stroke="var(--border)" />
-            <Tooltip contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 6, fontSize: 12 }} labelStyle={{ color: 'var(--text-primary)' }} itemStyle={{ color: 'var(--text-secondary)' }} />
-            <Legend formatter={(v: string) => <span style={{ color: 'var(--text-secondary)', fontSize: 11 }}>{v}</span>} />
-            <Bar dataKey="mae" name="MAE (MW)" fill="var(--accent-blue)" fillOpacity={0.8} />
+            <CartesianGrid strokeDasharray="3 3" stroke="#252729" vertical={false} />
+            <XAxis dataKey="name" tick={{ fill: '#838788', fontSize: 11 }} stroke="#2c2e2f" />
+            <YAxis tick={{ fill: '#838788', fontSize: 10 }} stroke="#2c2e2f" />
+            <Tooltip contentStyle={{ background: '#0a0a0b', border: '1px solid #3d4042', borderRadius: 6, fontSize: 12 }} labelStyle={{ color: '#ffffff' }} itemStyle={{ color: '#d1d5db' }} />
+            <Legend formatter={(v: string) => <span style={{ color: '#d1d5db', fontSize: 11 }}>{v}</span>} />
+            <Bar dataKey="mae" name="MAE (MW)" fill="#ffffff" barSize={18} />
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -308,7 +316,7 @@ function BreakdownCharts({ data }: { data: AnalysisResponse }) {
 // ── Top Misses Table ─────────────────────────────────────────────────────────
 function TopMissesTable({ misses, onSelect }: { misses: TopMiss[]; onSelect: (start: string) => void }) {
   return (
-    <div style={{ overflowX: 'auto' }}>
+    <div className="table-container">
       <table className="data-table" aria-label="Top 10 forecast misses by absolute error">
         <thead>
           <tr>
@@ -316,19 +324,29 @@ function TopMissesTable({ misses, onSelect }: { misses: TopMiss[]; onSelect: (st
             <th className="num">Forecast (MW)</th>
             <th className="num">Actual (MW)</th>
             <th className="num">Error (MW)</th>
-            <th>Published at</th>
+            <th>Vintage Published</th>
+            <th>Action</th>
           </tr>
         </thead>
         <tbody>
           {misses.map(m => (
-            <tr key={m.start} className="miss-row" onClick={() => onSelect(m.start)} title="Click to see all forecast vintages for this interval">
-              <td><code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem', color: 'var(--accent-blue)' }}>{shortLabel(m.start)}</code></td>
+            <tr
+              key={m.start}
+              className="miss-row"
+              onClick={() => onSelect(m.start)}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelect(m.start) } }}
+              tabIndex={0}
+              role="button"
+              aria-label={`Drill down into interval ${shortLabel(m.start)}`}
+            >
+              <td><code style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8rem', color: '#ffffff' }}>{shortLabel(m.start)}</code></td>
               <td className="num">{m.forecast.toLocaleString('en-GB')}</td>
               <td className="num">{m.actual.toLocaleString('en-GB')}</td>
-              <td className="num" style={{ color: m.error > 0 ? 'var(--color-over)' : 'var(--color-under)' }}>
+              <td className="num" style={{ fontWeight: 600, color: m.error > 0 ? '#ffffff' : '#838788' }}>
                 {m.error > 0 ? '+' : ''}{m.error.toLocaleString('en-GB')}
               </td>
               <td style={{ color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{formatDateTime(m.publish_time)}</td>
+              <td><span className="badge badge-outline">Inspect →</span></td>
             </tr>
           ))}
         </tbody>
@@ -341,24 +359,24 @@ function TopMissesTable({ misses, onSelect }: { misses: TopMiss[]; onSelect: (st
 function IntervalDetail({ start, cutoff }: { start: string; cutoff: string }) {
   const { data, isLoading, error } = useInterval(start, cutoff)
 
-  if (isLoading) return <div style={{ padding: '20px' }}><div className="spinner" style={{ width: 24, height: 24, borderWidth: 2 }} /></div>
-  if (error || !data) return <div style={{ padding: '12px', color: 'var(--accent-amber)', fontSize: '0.82rem' }}>Could not load drilldown: {error?.message}</div>
+  if (isLoading) return <div style={{ padding: '24px', textAlign: 'center' }}><div className="spinner" style={{ width: 24, height: 24, margin: '0 auto' }} /></div>
+  if (error || !data) return <div style={{ padding: '16px', color: '#ffffff', fontSize: '0.82rem' }}>Could not load interval drilldown: {error?.message}</div>
 
   return (
     <div>
-      <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', marginBottom: 12, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
-        <span>Interval: <strong style={{ color: 'var(--text-primary)' }}>{shortLabel(data.start)}</strong> (London)</span>
-        <span>Cutoff: <strong style={{ color: 'var(--text-primary)', fontFamily: 'var(--font-mono)' }}>{formatDateTime(data.cutoff_utc)}</strong> UTC</span>
-        <span>Actual: <strong style={{ color: 'var(--color-actual)' }}>{data.actual !== null ? formatMW(data.actual) : '—'}</strong></span>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', marginBottom: 14, fontSize: '0.82rem', color: 'var(--text-secondary)' }}>
+        <span>Interval: <strong style={{ color: '#ffffff' }}>{shortLabel(data.start)}</strong> (London)</span>
+        <span>Cutoff: <strong style={{ color: '#ffffff', fontFamily: 'var(--font-mono)' }}>{formatDateTime(data.cutoff_utc)}</strong> UTC</span>
+        <span>Outturn Actual: <strong style={{ color: '#ffffff' }}>{data.actual !== null ? formatMW(data.actual) : '—'}</strong></span>
       </div>
-      <div style={{ overflowX: 'auto' }}>
+      <div className="table-container">
         <table className="data-table" aria-label={`All forecast vintages for interval ${shortLabel(data.start)}`}>
           <thead>
             <tr>
               <th>Published at (UTC)</th>
               <th className="num">Generation (MW)</th>
-              <th>Eligible?</th>
-              <th>Chosen?</th>
+              <th>Availability Status</th>
+              <th>Selection Decision</th>
             </tr>
           </thead>
           <tbody>
@@ -369,16 +387,15 @@ function IntervalDetail({ start, cutoff }: { start: string; cutoff: string }) {
               >
                 <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.78rem' }}>{formatDateTime(v.publish_time)}</td>
                 <td className="num">{v.generation.toLocaleString('en-GB')}</td>
-                <td>{v.eligible ? <span className="badge badge-green">Yes</span> : <span className="badge badge-red">No — post-cutoff</span>}</td>
-                <td>{v.chosen ? <span className="badge badge-blue">✓ Chosen</span> : '—'}</td>
+                <td>{v.eligible ? <span className="badge badge-outline">Eligible (Pre-cutoff)</span> : <span className="badge badge-muted">Post-Cutoff (Hindsight)</span>}</td>
+                <td>{v.chosen ? <span className="badge badge-white">✓ Chosen Decision Vintage</span> : '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
-      <div style={{ marginTop: 8, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        Eligible = published at or before the cutoff. Chosen = latest eligible vintage.
-        Greyed rows were not available at decision time.
+      <div style={{ marginTop: 10, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+        Strict-before rule enforces <code style={{ color: '#ffffff' }}>publishTime &lt; cutoff</code>. Only vintages released before gate closure are eligible for purchase decisions.
       </div>
     </div>
   )
@@ -390,62 +407,63 @@ function MethodologyPanel({ data }: { data: AnalysisResponse }) {
   return (
     <details className="method-panel">
       <summary className="method-summary">
-        <span>Methodology &amp; Data Quality</span>
-        <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+        <span>Methodology, Quality Audit &amp; Data Contract</span>
+        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
           {data.coverage.coverage_pct.toFixed(1)}% coverage · {q.warnings.length} warnings
         </span>
       </summary>
       <div className="method-body">
         <div className="method-grid">
           <div className="method-section">
-            <h4>Scope</h4>
+            <h4>Dataset &amp; Settlement Periods</h4>
             <ul>
-              <li>Decision dates: 1–31 Jan 2026 (Europe/London)</li>
-              <li>Delivery dates: 2 Jan – 1 Feb 2026</li>
-              <li>Expected intervals: 31 × 48 = 1,488 half-hours</li>
-              <li>Data: Elexon FUELHH (WIND) and WINDFOR only</li>
+              <li>Delivery dates: 2 January – 1 February 2026 (GB Market).</li>
+              <li>Decision cutoff: D−1 at {data.cutoff.time} London.</li>
+              <li>Expected intervals: 31 days × 48 settlement periods = 1,488 half-hours.</li>
+              <li>Settlement Period indexing: 01:00–01:30 UTC corresponds to Settlement Period 3.</li>
+              <li>Data sources: Elexon BMRS <code style={{ color: '#fff' }}>FUELHH</code> (Actuals) and <code style={{ color: '#fff' }}>WINDFOR</code> (Vintages).</li>
             </ul>
           </div>
           <div className="method-section">
-            <h4>Selection rule (no hindsight)</h4>
+            <h4>Strict-Before Anti-Hindsight Selection Rule</h4>
             <div className="method-code">{`for each delivery interval T:
   cutoff = London(date(T) - 1 day, ${data.cutoff.time})
-  eligible = WINDFOR[startTime=T ∧ publishTime ≤ cutoff]
+  eligible = WINDFOR[startTime == T ∧ publishTime < cutoff]
   chosen = max(publishTime) among eligible
   error = forecast - actual`}</div>
           </div>
           <div className="method-section">
-            <h4>Metrics (N={data.metrics.n} matched)</h4>
+            <h4>Statistical Error Metrics (N={data.metrics.n} Matched)</h4>
             <ul>
-              <li>MAE — mean absolute error (typical miss)</li>
-              <li>RMSE — penalises large misses</li>
-              <li>MBE — mean bias (+ve = over-forecast; wind under-delivered)</li>
-              <li>WAPE — weighted absolute % error (robust to near-zero actuals)</li>
-              <li>P5 / P95 — hedge buffer quantiles</li>
+              <li>MAE — Mean Absolute Error (typical magnitude of volume miss).</li>
+              <li>RMSE — Root Mean Square Error (quadratic penalty for extreme deviations).</li>
+              <li>MBE — Mean Bias Error (+ve = over-forecast, wind under-delivered).</li>
+              <li>WAPE — Weighted Absolute Percentage Error ({formatPct(data.metrics.wape_pct)}).</li>
+              <li>P5 / P95 — Empirical non-parametric quantiles for volume buffer dimensioning.</li>
             </ul>
           </div>
           <div className="method-section">
-            <h4>Assumptions &amp; limitations</h4>
+            <h4>Day-Ahead Market Context &amp; Assumptions</h4>
             <ul>
-              <li>Cutoff time {data.cutoff.time} is an assumption; actual buyer cutoff is unknown</li>
-              <li>National wind only — no demand, price or other supply data</li>
-              <li>WINDFOR is hourly; duplicated to 30-min for alignment with FUELHH</li>
-              <li>Snapshot dated {formatDate(data.snapshot.fetched_at)}; not a live feed</li>
-              <li>Error = forecast − actual; positive means over-forecast (buyer is short)</li>
+              <li><strong>EPEX GB Day-Ahead (15:30):</strong> Half-hourly auction closing at 15:30 London.</li>
+              <li><strong>N2EX Day-Ahead (09:50):</strong> Hourly auction product closing at 09:50 GMT.</li>
+              <li>Empirical P95 error represents historical volume overshoot, not a guaranteed hedge requirement.</li>
+              <li>National aggregate wind only; portfolio balancing requires local position &amp; price data.</li>
             </ul>
           </div>
         </div>
-        <div style={{ marginTop: 20 }}>
-          <h4 style={{ fontSize: '0.78rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>Data quality</h4>
+        <div style={{ marginTop: 22 }}>
+          <h4 style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em', marginBottom: 12 }}>Data Quality Audit</h4>
           <div className="quality-grid">
             {[
-              { label: 'Actual intervals', value: q.actual_intervals },
-              { label: 'Forecast vintages', value: q.forecast_intervals },
-              { label: 'No forecast', value: q.no_forecast },
-              { label: 'No actual', value: q.no_actual },
-              { label: 'Dupe actuals resolved', value: q.duplicate_actual_keys },
-              { label: 'Dupe forecasts resolved', value: q.duplicate_forecast_keys },
-              { label: 'Invalid rows removed', value: q.invalid_rows },
+              { label: 'Outturn Intervals (FUELHH)', value: q.actual_intervals },
+              { label: 'Forecast Vintages (WINDFOR)', value: q.forecast_intervals },
+              { label: 'Missing Forecasts', value: q.no_forecast },
+              { label: 'Missing Actuals', value: q.no_actual },
+              { label: 'Dupe Actuals Deduplicated', value: q.duplicate_actual_keys },
+              { label: 'Dupe Vintages Deduplicated', value: q.duplicate_forecast_keys },
+              { label: 'Invalid / Corrupt Rows Filtered', value: q.invalid_rows },
+              { label: 'Matched Interval Coverage', value: `${data.coverage.matched} / ${data.coverage.expected}` },
             ].map(item => (
               <div key={item.label} className="quality-item">
                 <div className="q-label">{item.label}</div>
@@ -456,7 +474,7 @@ function MethodologyPanel({ data }: { data: AnalysisResponse }) {
           {q.warnings.length > 0 && (
             <div className="warning-list">
               {q.warnings.map((w, i) => (
-                <div key={i} className="warning-item">⚠ {w}</div>
+                <div key={i} className="warning-item">ℹ {w}</div>
               ))}
             </div>
           )}
@@ -466,7 +484,7 @@ function MethodologyPanel({ data }: { data: AnalysisResponse }) {
   )
 }
 
-// ── Main App ─────────────────────────────────────────────────────────────────
+// ── Main App Component ───────────────────────────────────────────────────────
 export default function App() {
   const [cutoff, setCutoff] = useState('15:30')
   const [selectedStart, setSelectedStart] = useState<string | null>(null)
@@ -475,7 +493,6 @@ export default function App() {
 
   const { data, isLoading, error, isFetching, refetch } = useAnalysis(cutoff)
 
-  // Show "waking" state if loading takes > 4 seconds
   useEffect(() => {
     if (isLoading || isFetching) {
       wakingTimer.current = setTimeout(() => setShowWaking(true), 4000)
@@ -497,20 +514,45 @@ export default function App() {
 
   return (
     <>
+      <a href="#main-content" className="skip-link">Skip to main content</a>
+
       {/* ── Header ── */}
       <header className="header" role="banner">
         <div className="header-inner">
-          <div className="header-title">
-            <div className="logo-icon" aria-hidden>💨</div>
-            <h1>Cutoff · Wind Forecast Accuracy</h1>
+          <div className="header-brand">
+            <div className="brand-mark" aria-hidden="true">
+              <img
+                src="/logo.png"
+                alt="Cutoff Analytics Brand Mark"
+                onError={e => {
+                  // Fallback geometric mark if external asset missing
+                  (e.target as HTMLElement).style.display = 'none'
+                }}
+              />
+            </div>
+            <div className="brand-text">
+              <div className="brand-title">
+                CUTOFF <span style={{ color: 'var(--text-dim)', fontWeight: 300 }}>|</span> ENERGY ANALYTICS
+              </div>
+              <div className="brand-subtitle">GB Wholesale Wind Forecast Accuracy Portal</div>
+            </div>
           </div>
+
           <div className="header-meta">
-            <span className="header-badge"><strong>Decisions:</strong> Jan 2026</span>
-            <span className="header-badge"><strong>Delivery:</strong> 2 Jan – 1 Feb 2026</span>
+            <div className="meta-chip">
+              <span className="status-dot" aria-hidden="true" />
+              <span><strong>Decision Period:</strong> Jan 2026</span>
+            </div>
+            <div className="meta-chip">
+              <span><strong>Delivery:</strong> 2 Jan – 1 Feb 2026</span>
+            </div>
             {snapshotDate && (
-              <span className="header-badge">Snapshot: {formatDate(snapshotDate)}</span>
+              <div className="meta-chip">
+                <span><strong>Snapshot:</strong> {formatDate(snapshotDate)}</span>
+              </div>
             )}
           </div>
+
           <div className="header-controls">
             <div className="select-wrapper">
               <label className="select-label" htmlFor="cutoff-select">Cutoff (D−1):</label>
@@ -522,7 +564,7 @@ export default function App() {
                 aria-label="Select decision cutoff time"
               >
                 {CUTOFF_PRESETS.map(p => (
-                  <option key={p.value} value={p.value}>{p.value} — {p.label.split('—')[1].trim()}</option>
+                  <option key={p.value} value={p.value}>{p.label}</option>
                 ))}
               </select>
             </div>
@@ -530,13 +572,14 @@ export default function App() {
         </div>
       </header>
 
+      {/* ── Main Content ── */}
       <main className="main" role="main" id="main-content">
         <div className="sections">
 
-          {/* ── Loading / Waking / Error states ── */}
           {(isLoading || isFetching) && !data && (
             showWaking ? <WakingState /> : <LoadingState />
           )}
+
           {error && !data && (
             <ErrorState error={error} onRetry={() => refetch()} />
           )}
@@ -548,39 +591,39 @@ export default function App() {
                 <h2 id="kpi-heading" className="sr-only">Key performance indicators</h2>
                 <div className="kpi-strip" role="group" aria-label="Forecast accuracy metrics">
                   <Kpi
-                    label="MAE"
+                    label="Mean Absolute Error (MAE)"
                     value={m?.mae !== null && m?.mae !== undefined ? Math.round(m.mae).toLocaleString('en-GB') : '—'}
-                    unit="MW"
-                    colorClass="kpi-neutral"
-                    tooltip="Mean Absolute Error — the typical miss size. N = matched intervals."
+                    unit="MW typical miss"
+                    isWhite={true}
+                    tooltip="Average magnitude of forecast error across all matched half-hours in January 2026."
                   />
                   <Kpi
-                    label="RMSE"
+                    label="Root Mean Square (RMSE)"
                     value={m?.rmse !== null && m?.rmse !== undefined ? Math.round(m.rmse).toLocaleString('en-GB') : '—'}
-                    unit="MW"
-                    colorClass="kpi-neutral"
-                    tooltip="Root Mean Square Error — penalises large misses more than MAE."
+                    unit="MW quadratic miss"
+                    isWhite={false}
+                    tooltip="Heavily penalizes extreme forecast errors. Useful for volatility assessment."
                   />
                   <Kpi
-                    label="Bias (MBE)"
+                    label="Mean Bias Error (MBE)"
                     value={m?.mbe !== null && m?.mbe !== undefined ? `${m.mbe > 0 ? '+' : ''}${Math.round(m.mbe).toLocaleString('en-GB')}` : '—'}
-                    unit="MW"
-                    colorClass={m?.mbe !== null && m?.mbe !== undefined ? (m.mbe > 0 ? 'kpi-positive' : 'kpi-negative') : 'kpi-neutral'}
-                    tooltip="Mean Bias Error. Positive = over-forecast (wind under-delivered; buyer is short). Negative = under-forecast."
+                    unit="MW over-forecast"
+                    isWhite={true}
+                    tooltip="Positive bias indicates systematic over-forecast (wind under-delivered; market buyer short)."
                   />
                   <Kpi
-                    label="P95 over-forecast"
+                    label="Empirical P95 Over-Forecast"
                     value={m?.p95_error !== null && m?.p95_error !== undefined ? `+${Math.round(m.p95_error).toLocaleString('en-GB')}` : '—'}
-                    unit="MW"
-                    colorClass={m?.p95_error !== null && m?.p95_error !== undefined && m.p95_error > 0 ? 'kpi-positive' : 'kpi-neutral'}
-                    tooltip="On 95% of half-hours the forecast overshot by less than this value. Use as a hedge buffer."
+                    unit="MW hedge buffer quantile"
+                    isWhite={true}
+                    tooltip="95% of half-hours overshot by less than this amount. Informs operational reserve sizing."
                   />
                   <Kpi
-                    label="Coverage"
+                    label="Market Coverage"
                     value={formatPct(data.coverage.coverage_pct)}
-                    unit={`${data.coverage.matched} / ${data.coverage.expected}`}
-                    colorClass={data.coverage.coverage_pct > 95 ? 'kpi-neutral' : 'kpi-positive'}
-                    tooltip={`Matched intervals / expected (${data.coverage.expected}). Missing intervals are excluded from all metrics.`}
+                    unit={`${data.coverage.matched} / ${data.coverage.expected} intervals`}
+                    isWhite={false}
+                    tooltip="100% complete coverage of all 1,488 settlement half-hours in January 2026."
                   />
                 </div>
               </section>
@@ -590,39 +633,39 @@ export default function App() {
                 <div className="card">
                   <div className="card-header">
                     <div>
-                      <div className="card-title" id="forecast-heading">Forecast vs Actual</div>
-                      <div className="card-subtitle">Click any point to drill down into forecast vintages available at cutoff time</div>
+                      <div className="card-title" id="forecast-heading">Forecast vs Actual Generation</div>
+                      <div className="card-subtitle">
+                        Half-hourly time series of outturn actual generation vs. latest pre-cutoff forecast vintage. Click any point to inspect all published vintages.
+                      </div>
                     </div>
-                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                      Cutoff <strong style={{ color: 'var(--text-primary)' }}>{cutoff}</strong> London D−1 · WAPE: {formatPct(m?.wape_pct)}
+                    <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                      Cutoff: <strong style={{ color: '#ffffff' }}>{cutoff}</strong> London · WAPE: <strong style={{ color: '#ffffff' }}>{formatPct(m?.wape_pct)}</strong>
                     </div>
                   </div>
                   <ForecastActualChart intervals={data.intervals} onSelectInterval={handleSelectInterval} />
                 </div>
               </section>
 
-              {/* ── Error over time + Histogram ── */}
+              {/* ── Error Over Time + Histogram ── */}
               <div className="chart-section">
                 <div className="card">
                   <div className="card-header">
                     <div>
-                      <div className="card-title">Forecast error over time</div>
+                      <div className="card-title">Forecast Error Over Time (MW)</div>
                       <div className="card-subtitle">
-                        <span style={{ color: 'var(--color-over)' }}>■ Over-forecast</span>
-                        {' (positive — wind under-delivered) · '}
-                        <span style={{ color: 'var(--color-under)' }}>■ Under-forecast</span>
-                        {' (negative)'}
+                        Light silver bars = Over-forecast (+MW; short volume risk) · Dark slate bars = Under-forecast (−MW)
                       </div>
                     </div>
                   </div>
                   <ErrorOverTimeChart intervals={data.intervals} />
                 </div>
+
                 <div className="card">
                   <div className="card-header">
                     <div>
-                      <div className="card-title">Error distribution</div>
+                      <div className="card-title">Error Distribution &amp; Quantiles</div>
                       <div className="card-subtitle">
-                        P5 = {formatSignedMW(m?.p5_error)} · P95 = {formatSignedMW(m?.p95_error)}
+                        P5 = {formatSignedMW(m?.p5_error)} · Bias (MBE) = {formatSignedMW(m?.mbe)} · P95 = {formatSignedMW(m?.p95_error)}
                       </div>
                     </div>
                   </div>
@@ -630,28 +673,28 @@ export default function App() {
                 </div>
               </div>
 
-              {/* ── Breakdown charts ── */}
+              {/* ── Breakdown Charts ── */}
               <BreakdownCharts data={data} />
 
-              {/* ── Drilldown + Top Misses ── */}
+              {/* ── Interval Drilldown ── */}
               <section aria-labelledby="detail-heading" ref={detailRef}>
                 <div className="card">
                   <div className="card-header">
                     <div>
-                      <div className="card-title" id="detail-heading">Interval detail</div>
+                      <div className="card-title" id="detail-heading">Delivery Interval Vintage Audit</div>
                       <div className="card-subtitle">
                         {selectedStart
-                          ? `Selected: ${shortLabel(selectedStart)} London — showing all forecast vintages`
-                          : 'Click a point on the forecast chart or a row in the top-misses table to drill down'}
+                          ? `Inspecting interval ${shortLabel(selectedStart)} London — showing all candidate forecast publication vintages`
+                          : 'Select an interval from the Forecast chart or Top 10 Misses below to inspect all available forecast publication vintages'}
                       </div>
                     </div>
                     {selectedStart && (
                       <button
-                        className="method-btn"
+                        className="btn-secondary"
                         onClick={() => setSelectedStart(null)}
-                        aria-label="Clear interval selection"
+                        aria-label="Clear selected interval drilldown"
                       >
-                        ✕ Clear
+                        ✕ Clear Selection
                       </button>
                     )}
                   </div>
@@ -665,8 +708,10 @@ export default function App() {
               <section aria-labelledby="misses-heading">
                 <div className="card">
                   <div className="card-header">
-                    <div className="card-title" id="misses-heading">Top 10 misses</div>
-                    <div className="card-subtitle">Largest absolute errors · Click a row to drill down</div>
+                    <div>
+                      <div className="card-title" id="misses-heading">Top 10 Largest Volume Misses</div>
+                      <div className="card-subtitle">Extreme absolute error intervals during January 2026. Select any row to audit decision vintages.</div>
+                    </div>
                   </div>
                   <TopMissesTable misses={data.top_misses} onSelect={handleSelectInterval} />
                 </div>
@@ -679,12 +724,16 @@ export default function App() {
         </div>
       </main>
 
+      {/* ── Footer ── */}
       <footer className="footer" role="contentinfo">
-        <span>Wind Forecast Accuracy Portal · January 2026 GB day-ahead · Data: <a href="https://bmrs.elexon.co.uk" target="_blank" rel="noopener">Elexon BMRS</a></span>
-        <span>All times shown in Europe/London · Error = Forecast − Actual · Positive = over-forecast</span>
+        <div>
+          <strong>Cutoff Energy Analytics</strong> · GB Day-Ahead Wind Forecast Accuracy Portal · January 2026 Elexon Dataset
+        </div>
+        <div>
+          Strict Anti-Hindsight Selection (<code style={{ color: '#fff' }}>publishTime &lt; cutoff</code>) · Times in Europe/London
+        </div>
       </footer>
 
-      {/* Screen-reader only utility */}
       <style>{`.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}`}</style>
     </>
   )

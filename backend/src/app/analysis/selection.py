@@ -12,6 +12,7 @@ Invariant checked at runtime:
     chosen.publishTime < cutoff(T) for every matched row (strict-before)
 
 Pure function: no I/O, no FastAPI imports.
+Optimized via indexed grouped lookup (python-performance-optimization).
 """
 
 from __future__ import annotations
@@ -33,10 +34,10 @@ def build_expected_intervals() -> list[datetime]:
     → 31 days × 48 half-hours = 1,488 intervals
     """
     from zoneinfo import ZoneInfo  # noqa: PLC0415
+    from datetime import date  # noqa: PLC0415
 
     london = ZoneInfo("Europe/London")
     intervals = []
-    from datetime import date  # noqa: PLC0415
 
     start_date = date(2026, 1, 2)
     end_date = date(2026, 2, 2)  # exclusive
@@ -82,34 +83,35 @@ def select_forecasts(
     """
     expected = build_expected_intervals()
 
-    # Index lookups for speed
-    fuelhh_idx = fuelhh.set_index("startTime")
-    windfor_indexed = windfor.copy()
+    # Pre-index FUELHH by startTime for O(1) lookup
+    fuelhh_dict: dict[pd.Timestamp, tuple[float | None, int | None]] = {}
+    if not fuelhh.empty and "startTime" in fuelhh.columns:
+        for row in fuelhh.itertuples():
+            st = getattr(row, "startTime")
+            mw = getattr(row, "actual_mw", None)
+            sp_val = getattr(row, "settlementPeriod", None)
+            fuelhh_dict[st] = (float(mw) if mw is not None else None, sp_val)
+
+    # Group WINDFOR by startTime once, sorted by publishTime (O(N log N) pre-sort, O(1) per group)
+    if not windfor.empty:
+        windfor_sorted = windfor.sort_values(["startTime", "publishTime"])
+        wf_groups = {k: v for k, v in windfor_sorted.groupby("startTime")}
+    else:
+        wf_groups = {}
 
     rows = []
     for T in expected:
         cutoff_dt = cutoff_utc(T, cutoff_hhmm)
 
-        # Select eligible vintages: startTime == T, publishTime < cutoff (strict-before
-        # to ensure the forecast was published and available before market gate closure)
-        mask = (windfor["startTime"] == T) & (windfor["publishTime"] < cutoff_dt)
-        eligible = windfor[mask]
+        actual_mw, sp = fuelhh_dict.get(pd.Timestamp(T), (None, None))
+        if sp is not None:
+            try:
+                sp = int(sp)
+            except (TypeError, ValueError):
+                sp = None
 
-        # Actual
-        actual_mw = None
-        sp = None
-        if T in fuelhh_idx.index:
-            row = fuelhh_idx.loc[T]
-            actual_mw = float(row["actual_mw"])
-            sp = row.get("settlementPeriod", None)
-            if sp is not None:
-                try:
-                    sp = int(sp)
-                except (TypeError, ValueError):
-                    sp = None
-
-        if eligible.empty:
-            status = "NO_FORECAST"
+        vintages = wf_groups.get(pd.Timestamp(T))
+        if vintages is None or vintages.empty:
             rows.append({
                 "start_utc": T,
                 "forecast_mw": None,
@@ -118,13 +120,30 @@ def select_forecasts(
                 "publish_time": None,
                 "lead_hours": None,
                 "cutoff_utc": cutoff_dt,
-                "status": status,
+                "status": "NO_FORECAST",
                 "settlement_period": sp,
             })
             continue
 
-        # Pick the latest publishTime (most recent prior to decision time)
-        chosen = eligible.loc[eligible["publishTime"].idxmax()]
+        # Fast filtering: publishTime < cutoff (strict-before)
+        eligible = vintages[vintages["publishTime"] < cutoff_dt]
+        if eligible.empty:
+            rows.append({
+                "start_utc": T,
+                "forecast_mw": None,
+                "actual_mw": actual_mw,
+                "error_mw": None,
+                "publish_time": None,
+                "lead_hours": None,
+                "cutoff_utc": cutoff_dt,
+                "status": "NO_FORECAST",
+                "settlement_period": sp,
+            })
+            continue
+
+        # Since vintages was pre-sorted by publishTime, eligible is also sorted by publishTime.
+        # The latest eligible vintage is simply the last row (.iloc[-1]).
+        chosen = eligible.iloc[-1]
 
         # Runtime invariant check: must be strictly before cutoff
         assert chosen["publishTime"] < cutoff_dt, (
