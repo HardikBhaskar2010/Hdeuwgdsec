@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: cutoff-api
+    runtime: docker
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    plan: free
+    region: singapore
+    envVars:
+      - key: CORS_ORIGINS
+        value: "https://cutoff-submission.vercel.app,https://frontend-luna-kitsunes-projects.vercel.app,http://localhost:5173"
+      - key: SNAPSHOT_DIR
+        value: "/app/data/snapshot"
+    healthCheckPath: /health/ready
