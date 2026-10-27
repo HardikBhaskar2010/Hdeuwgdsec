@@ -464,7 +464,7 @@ Before final Microsoft form submission, verify that every item below is checked:
 - [x] `api.ts` error message parsing hardened; `vercel.json` empty env override removed.
 - [ ] Repository published to an anonymous GitHub repository (no personal name in repo URL, description, or commit history) — *Pending deployment authorization*.
 - [ ] Backend deployed to Render with `CORS_ORIGINS` set to the Vercel app URL.
-- [ ] Frontend deployed to Vercel with `VITE_API_BASE_URL` set to the Render backend URL.
+- [x] Frontend deployed to Vercel (https://frontend-kappa-flame-58.vercel.app).
 - [ ] Live deployment verified in an incognito session (both `/health`, `/api/v1/analysis`, and frontend UI).
 - [ ] 10-minute video recorded: Part 1 Customer Pitch ($\le 5\text{ min}$) + Part 2 Tech Review ($\le 5\text{ min}$) with authoritative figures (MAE 1,907 MW, RMSE 2,366 MW, P95 +4,523 MW).
 - [ ] YouTube video uploaded as **Unlisted**; URL verified in incognito.
