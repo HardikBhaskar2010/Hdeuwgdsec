@@ -21,14 +21,14 @@ Commercial energy buyers, balancing traders, and hedge managers commit to multi-
 
 ## 2. Live Links & Endpoints
 
-| Service | Target | Description |
-|---|---|---|
-| **Web Portal** | `http://localhost:5173` *(or Vercel)* | Single-Page Trading Dashboard |
-| **Backend API** | `http://localhost:8000` *(or Render)* | FastAPI Production Service |
-| **API Health** | `/health` (`http://localhost:8000/health`) | Snapshot status & verification |
-| **Analysis Endpoint** | `/api/v1/analysis?cutoff=15:30` | Core metrics, time series, & breakdowns |
-| **Drilldown Endpoint** | `/api/v1/intervals/{start_iso}` | Candidate vintages per delivery interval |
-| **Interactive OpenAPI Docs** | `/docs` (`http://localhost:8000/docs`) | Swagger UI contract |
+| Service | Target | URL | Description |
+|---|---|---|---|
+| **Web Portal** | **Vercel** (Production) | [cutoff-submission.vercel.app](https://cutoff-submission.vercel.app) | Single-Page Trading Dashboard (React 18 + Vite) |
+| **Backend API** | **Render** (Production) | [cutoff-api-rwt1.onrender.com](https://cutoff-api-rwt1.onrender.com) | FastAPI Production Service (Docker) |
+| **API Health** | **Render** | [`/health/ready`](https://cutoff-api-rwt1.onrender.com/health/ready) | Readiness probe verifying loaded snapshot dataset |
+| **Analysis Endpoint** | **Render** | [`/api/v1/analysis?cutoff=15:30`](https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30) | Core metrics, time series, & breakdowns |
+| **Interactive OpenAPI Docs** | **Render** | [`/docs`](https://cutoff-api-rwt1.onrender.com/docs) | Swagger UI interactive contract |
+
 
 ---
 

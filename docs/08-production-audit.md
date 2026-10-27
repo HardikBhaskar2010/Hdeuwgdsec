@@ -648,7 +648,48 @@ An independent recalculation was executed directly against the raw snapshot data
 ---
 
 ### 16.7 Final Release Verdict
+ 
+ **VERDICT: GO FOR ANONYMOUS DEPLOYMENT**
+ 
+ All release-blocking software defects (P0), frontend test/lint failures (P1), and code hygiene violations (P2) have been resolved and independently re-verified with 100% test passes across Python and TypeScript suites. The mathematical engine remains perfectly calibrated to the published baseline. The repository is ready for creation of an anonymous public repository, push, and cloud deployment to Render and Vercel upon authorization.
 
-**VERDICT: GO FOR ANONYMOUS DEPLOYMENT**
+---
 
-All release-blocking software defects (P0), frontend test/lint failures (P1), and code hygiene violations (P2) have been resolved and independently re-verified with 100% test passes across Python and TypeScript suites. The mathematical engine remains perfectly calibrated to the published baseline. The repository is ready for creation of an anonymous public repository, push, and cloud deployment to Render and Vercel upon authorization.
+### 16.8 Cloud Deployment Execution & Live Service Verification
+
+Both the backend and frontend services were deployed to their respective cloud targets in the dedicated `Cutoff` project environment:
+
+#### 16.8.1 Backend Web Service (Render)
+- **Project:** `Cutoff` (`prj-dbgfpquk1f9s73e6j4ug`)
+- **Environment:** `Production` (`evm-dbgfpquk1f9s73e6j4v0`)
+- **Service Name:** `cutoff-api` (`srv-dbgg54m7bikc73bg2vng`)
+- **Runtime:** Docker (Python 3.11-slim, `CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]`)
+- **Service URL:** `https://cutoff-api-rwt1.onrender.com`
+- **Readiness Verification (`/health/ready`):** Returns HTTP 200 `{"status":"ready","snapshot_loaded":true,"snapshot_fetched_at":"2026-10-27T16:05:50Z"}`.
+- **Analysis Endpoint Verification (`/api/v1/analysis?cutoff=15:30`):** Returns HTTP 200 with pre-cached metrics matching authoritative baseline: MAE 1,906.57 MW, RMSE 2,365.67 MW, MBE +1,692.47 MW, WAPE 16.90%, P5 −843.30 MW, P95 +4,523.40 MW, Coverage 1,488 / 1,488.
+
+#### 16.8.2 Frontend Web Portal (Vercel)
+- **Project:** `frontend` (`prj_Pu86wADBuergiyC70lfVo0rDRrMW`)
+- **Scope / Team:** `luna-kitsunes-projects`
+- **Framework Preset:** Vite
+- **Root Directory:** `frontend/`
+- **Production URL:** `https://cutoff-submission.vercel.app`
+- **Environment Variables:** `VITE_API_BASE_URL=https://cutoff-api-rwt1.onrender.com`
+- **Deployment Protection:** SSO protection disabled for public evaluation access (`vercel project protection disable --sso`).
+
+---
+
+### 16.9 End-to-End Production Verification & Visual Audit
+
+An automated browser verification was executed against `https://cutoff-submission.vercel.app`:
+1. **Network Connectivity:** The single-page dashboard successfully initiates an asynchronous HTTP request to `https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30` and receives the complete 1,488-interval payload.
+2. **Error-Free Render:** Zero error banners or warning toasts rendered (`0 warnings`).
+3. **KPI Displays Verified:**
+   - **MAE:** `1,907 MW`
+   - **RMSE:** `2,366 MW`
+   - **MBE:** `+1,692 MW`
+   - **WAPE:** `16.9%`
+   - **Empirical P95 Over-Forecast:** `+4,523 MW`
+   - **Market Coverage:** `100.0% (1,488 / 1,488)`
+4. **Interactive Controls:** Cutoff selector (`15:30` / `09:50`), summary tables, time-series graphs, and interval drilldowns operate smoothly in full dark terminal UX.
+
