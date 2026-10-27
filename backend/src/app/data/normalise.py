@@ -16,18 +16,17 @@ Key design notes:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
 
 import pandas as pd
 
 
 @dataclass
 class NormaliseResult:
-    fuelhh: pd.DataFrame          # clean actuals (startTime as UTC datetime, gen numeric)
-    windfor: pd.DataFrame         # clean forecasts aligned to 30-min slots
-    duplicate_actual_keys: int    # startTime dupes resolved
+    fuelhh: pd.DataFrame  # clean actuals (startTime as UTC datetime, gen numeric)
+    windfor: pd.DataFrame  # clean forecasts aligned to 30-min slots
+    duplicate_actual_keys: int  # startTime dupes resolved
     duplicate_forecast_keys: int  # (startTime, publishTime) dupes resolved
-    invalid_rows: int             # rows with invalid generation removed
+    invalid_rows: int  # rows with invalid generation removed
     warnings: list[str] = field(default_factory=list)
 
 
@@ -112,7 +111,9 @@ def normalise(
     wf = wf.drop_duplicates(subset=["startTime", "publishTime"], keep="last")
     duplicate_forecast_keys = pre_dedup_wf - len(wf)
     if duplicate_forecast_keys:
-        warnings.append(f"Resolved {duplicate_forecast_keys} duplicate WINDFOR (startTime, publishTime) keys")
+        warnings.append(
+            f"Resolved {duplicate_forecast_keys} duplicate WINDFOR (startTime, publishTime) keys"
+        )
 
     wf = wf[["startTime", "publishTime", "generation"]].copy()
     wf = wf.rename(columns={"generation": "forecast_mw"})
@@ -124,6 +125,7 @@ def normalise(
     # This means the same forecast vintage applies to both 14:00 and 14:30.
     wf_half = wf.copy()
     from pandas import Timedelta  # noqa: PLC0415
+
     wf_half["startTime"] = wf_half["startTime"] + Timedelta(minutes=30)
     wf_aligned = pd.concat([wf, wf_half], ignore_index=True)
 

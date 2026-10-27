@@ -17,9 +17,9 @@ High-performance implementation using pd.DatetimeIndex bisection (python-perform
 
 from __future__ import annotations
 
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 
+import numpy as np
 import pandas as pd
 
 from app.analysis.cutoff import cutoff_utc
@@ -33,8 +33,8 @@ def build_expected_intervals() -> list[datetime]:
     Delivery dates: 2026-01-02 .. 2026-02-01 (local = UTC in January)
     → 31 days × 48 half-hours = 1,488 intervals
     """
-    from zoneinfo import ZoneInfo  # noqa: PLC0415
     from datetime import date  # noqa: PLC0415
+    from zoneinfo import ZoneInfo  # noqa: PLC0415
 
     london = ZoneInfo("Europe/London")
     intervals = []
@@ -45,11 +45,14 @@ def build_expected_intervals() -> list[datetime]:
     while cur < end_date:
         for sp in range(48):
             local_dt = datetime(
-                cur.year, cur.month, cur.day,
-                (sp * 30) // 60, (sp * 30) % 60,
+                cur.year,
+                cur.month,
+                cur.day,
+                (sp * 30) // 60,
+                (sp * 30) % 60,
                 tzinfo=london,
             )
-            intervals.append(local_dt.astimezone(timezone.utc))
+            intervals.append(local_dt.astimezone(UTC))
         cur += timedelta(days=1)
     return intervals
 
@@ -87,7 +90,7 @@ def select_forecasts(
     fuelhh_dict: dict[pd.Timestamp, tuple[float | None, int | None]] = {}
     if not fuelhh.empty and "startTime" in fuelhh.columns:
         for row in fuelhh.itertuples():
-            st = getattr(row, "startTime")
+            st = row.startTime
             mw = getattr(row, "actual_mw", None)
             sp_val = getattr(row, "settlementPeriod", None)
             fuelhh_dict[st] = (float(mw) if mw is not None else None, sp_val)
@@ -116,17 +119,19 @@ def select_forecasts(
 
         entry = wf_dict.get(pd.Timestamp(T))
         if entry is None:
-            rows.append({
-                "start_utc": T,
-                "forecast_mw": None,
-                "actual_mw": actual_mw,
-                "error_mw": None,
-                "publish_time": None,
-                "lead_hours": None,
-                "cutoff_utc": cutoff_dt,
-                "status": "NO_FORECAST",
-                "settlement_period": sp,
-            })
+            rows.append(
+                {
+                    "start_utc": T,
+                    "forecast_mw": None,
+                    "actual_mw": actual_mw,
+                    "error_mw": None,
+                    "publish_time": None,
+                    "lead_hours": None,
+                    "cutoff_utc": cutoff_dt,
+                    "status": "NO_FORECAST",
+                    "settlement_period": sp,
+                }
+            )
             continue
 
         dti, fcs = entry
@@ -135,17 +140,19 @@ def select_forecasts(
         idx = int(dti.searchsorted(cutoff_dt, side="left")) - 1
 
         if idx < 0:
-            rows.append({
-                "start_utc": T,
-                "forecast_mw": None,
-                "actual_mw": actual_mw,
-                "error_mw": None,
-                "publish_time": None,
-                "lead_hours": None,
-                "cutoff_utc": cutoff_dt,
-                "status": "NO_FORECAST",
-                "settlement_period": sp,
-            })
+            rows.append(
+                {
+                    "start_utc": T,
+                    "forecast_mw": None,
+                    "actual_mw": actual_mw,
+                    "error_mw": None,
+                    "publish_time": None,
+                    "lead_hours": None,
+                    "cutoff_utc": cutoff_dt,
+                    "status": "NO_FORECAST",
+                    "settlement_period": sp,
+                }
+            )
             continue
 
         forecast_mw = float(fcs[idx])
@@ -166,17 +173,19 @@ def select_forecasts(
             status = "MATCHED"
             error_mw = forecast_mw - actual_mw
 
-        rows.append({
-            "start_utc": T,
-            "forecast_mw": forecast_mw,
-            "actual_mw": actual_mw,
-            "error_mw": error_mw,
-            "publish_time": pub_time,
-            "lead_hours": lead_hours,
-            "cutoff_utc": cutoff_dt,
-            "status": status,
-            "settlement_period": sp,
-        })
+        rows.append(
+            {
+                "start_utc": T,
+                "forecast_mw": forecast_mw,
+                "actual_mw": actual_mw,
+                "error_mw": error_mw,
+                "publish_time": pub_time,
+                "lead_hours": lead_hours,
+                "cutoff_utc": cutoff_dt,
+                "status": status,
+                "settlement_period": sp,
+            }
+        )
 
     df = pd.DataFrame(rows)
     df["start_utc"] = pd.to_datetime(df["start_utc"], utc=True)

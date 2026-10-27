@@ -1,5 +1,5 @@
 """Tests for data/normalise.py"""
-import pytest
+
 import pandas as pd
 
 from app.data.normalise import normalise

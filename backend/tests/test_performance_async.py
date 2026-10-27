@@ -6,14 +6,18 @@ Following python-testing-patterns, python-performance-optimization, and async-py
 
 import asyncio
 import time
-import pytest
-import pandas as pd
-from datetime import datetime, timezone
+from pathlib import Path
 
-from app.analysis.selection import select_forecasts, build_expected_intervals
-from app.analysis.cutoff import cutoff_utc
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from app.analysis.selection import select_forecasts
 from app.data.loader import load_snapshot
 from app.data.normalise import normalise
+from app.main import app, lifespan
+
+# Resolve repository data/snapshot independently of current working directory
+SNAPSHOT_DIR = Path(__file__).resolve().parents[2] / "data" / "snapshot"
 
 
 class TestPerformanceAndOptimization:
@@ -24,7 +28,7 @@ class TestPerformanceAndOptimization:
         Benchmark select_forecasts with full January 2026 dataset (114,000+ vintages).
         Target: Must execute in < 550ms (optimized from > 700ms via indexed grouping).
         """
-        fuelhh, windfor, manifest = load_snapshot("data/snapshot")
+        fuelhh, windfor, manifest = load_snapshot(str(SNAPSHOT_DIR))
         norm = normalise(fuelhh, windfor)
 
         t0 = time.perf_counter()
@@ -39,7 +43,7 @@ class TestPerformanceAndOptimization:
         """
         Verify that for EVERY single matched interval, publishTime is strictly before cutoff.
         """
-        fuelhh, windfor, manifest = load_snapshot("data/snapshot")
+        fuelhh, windfor, manifest = load_snapshot(str(SNAPSHOT_DIR))
         norm = normalise(fuelhh, windfor)
         result = select_forecasts(norm.fuelhh, norm.windfor, "15:30")
 
@@ -59,29 +63,59 @@ class TestAsyncEndpointsConcurrency:
         """
         Simulate concurrent requests to verify event loop does not block.
         """
-        from httpx import AsyncClient, ASGITransport
-        from app.main import app, lifespan
-
         # Initialize snapshot via FastAPI lifespan context
-        async with lifespan(app):
-            async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
-                # Trigger multiple concurrent async requests
-                t0 = time.perf_counter()
-                responses = await asyncio.gather(
-                    ac.get("/health"),
-                    ac.get("/api/v1/meta"),
-                    ac.get("/api/v1/analysis?cutoff=15:30"),
-                    ac.get("/api/v1/analysis?cutoff=09:50"),
-                    ac.get("/health"),
-                )
-                elapsed = time.perf_counter() - t0
+        async with (
+            lifespan(app),
+            AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac,
+        ):
+            # Trigger multiple concurrent async requests
+            t0 = time.perf_counter()
+            responses = await asyncio.gather(
+                ac.get("/health"),
+                ac.get("/api/v1/meta"),
+                ac.get("/api/v1/analysis?cutoff=15:30"),
+                ac.get("/api/v1/analysis?cutoff=09:50"),
+                ac.get("/health"),
+            )
+            elapsed = time.perf_counter() - t0
 
-                for resp in responses:
-                    assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
+            for resp in responses:
+                assert resp.status_code == 200, f"Expected 200, got {resp.status_code}: {resp.text}"
 
-                # Verify timing header added by async route
-                analysis_resp = responses[2]
-                assert "x-compute-time-seconds" in analysis_resp.headers
+            # Verify timing header added by async route
+            analysis_resp = responses[2]
+            assert "x-compute-time-seconds" in analysis_resp.headers
 
-                # Concurrent batch should finish swiftly
-                assert elapsed < 3.0, f"Concurrent requests took too long: {elapsed:.2f}s"
+            # Concurrent batch should finish swiftly
+            assert elapsed < 3.0, f"Concurrent requests took too long: {elapsed:.2f}s"
+
+    @pytest.mark.asyncio
+    async def test_readiness_probe_status_codes(self):
+        """
+        Verify liveness returns 200 while readiness returns 200 when loaded and 503 when degraded.
+        """
+        # 1. When snapshot is loaded
+        async with (
+            lifespan(app),
+            AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac,
+        ):
+            live_resp = await ac.get("/health/live")
+            assert live_resp.status_code == 200
+            assert live_resp.json()["status"] == "ok"
+
+            ready_resp = await ac.get("/health/ready")
+            assert ready_resp.status_code == 200
+            assert ready_resp.json()["status"] == "ready"
+            assert ready_resp.json()["snapshot_loaded"] is True
+
+        # 2. When snapshot is not loaded (degraded state)
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
+            app.state.snapshot_loaded = False
+            degraded_live = await ac.get("/health")
+            assert degraded_live.status_code == 200
+            assert degraded_live.json()["status"] == "degraded"
+
+            degraded_ready = await ac.get("/health/ready")
+            assert degraded_ready.status_code == 503
+            assert degraded_ready.json()["status"] == "not_ready"
+            assert degraded_ready.json()["snapshot_loaded"] is False

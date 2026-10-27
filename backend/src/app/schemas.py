@@ -1,7 +1,6 @@
 """Pydantic response schemas matching the API contract in docs/03-backend.md."""
-from __future__ import annotations
 
-from typing import Optional
+from __future__ import annotations
 
 from pydantic import BaseModel
 
@@ -21,7 +20,7 @@ class ErrorResponse(BaseModel):
 class HealthResponse(BaseModel):
     status: str
     snapshot_loaded: bool
-    snapshot_fetched_at: Optional[str] = None
+    snapshot_fetched_at: str | None = None
 
 
 # ── /api/v1/meta ─────────────────────────────────────────────────────────────
@@ -58,12 +57,12 @@ class CutoffInfo(BaseModel):
 
 
 class Metrics(BaseModel):
-    mae: Optional[float] = None
-    rmse: Optional[float] = None
-    mbe: Optional[float] = None
-    wape_pct: Optional[float] = None
-    p5_error: Optional[float] = None
-    p95_error: Optional[float] = None
+    mae: float | None = None
+    rmse: float | None = None
+    mbe: float | None = None
+    wape_pct: float | None = None
+    p5_error: float | None = None
+    p95_error: float | None = None
     unit: str = "MW"
     n: int
 
@@ -87,24 +86,24 @@ class Quality(BaseModel):
 
 class IntervalRow(BaseModel):
     start: str
-    forecast: Optional[float] = None
-    actual: Optional[float] = None
-    error: Optional[float] = None
-    publish_time: Optional[str] = None
-    lead_hours: Optional[float] = None
+    forecast: float | None = None
+    actual: float | None = None
+    error: float | None = None
+    publish_time: str | None = None
+    lead_hours: float | None = None
     status: str  # MATCHED | NO_FORECAST | NO_ACTUAL
 
 
 class SettlementPeriodBreakdown(BaseModel):
     period: int
-    mae: Optional[float] = None
-    mbe: Optional[float] = None
+    mae: float | None = None
+    mbe: float | None = None
     n: int
 
 
 class LeadTimeBucket(BaseModel):
     bucket: str
-    mae: Optional[float] = None
+    mae: float | None = None
     n: int
 
 
@@ -118,7 +117,7 @@ class TopMiss(BaseModel):
 
 class SnapshotInfo(BaseModel):
     fetched_at: str
-    manifest_sha256: Optional[str] = None
+    manifest_sha256: str | None = None
 
 
 class AnalysisResponse(BaseModel):
@@ -146,5 +145,5 @@ class VintageRow(BaseModel):
 class IntervalDetailResponse(BaseModel):
     start: str
     cutoff_utc: str
-    actual: Optional[float] = None
+    actual: float | None = None
     vintages: list[VintageRow]

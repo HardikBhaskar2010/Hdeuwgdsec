@@ -11,7 +11,6 @@ import asyncio
 import logging
 import time
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 
@@ -23,7 +22,9 @@ router = APIRouter()
 
 
 @router.get("/health")
+@router.get("/health/live")
 async def health(request: Request):
+    """Process liveness probe: returns 200 if server process is running."""
     state = request.app.state
     loaded = getattr(state, "snapshot_loaded", False)
     fetched_at = None
@@ -32,6 +33,29 @@ async def health(request: Request):
     return {
         "status": "ok" if loaded else "degraded",
         "snapshot_loaded": loaded,
+        "snapshot_fetched_at": fetched_at,
+    }
+
+
+@router.get("/health/ready")
+@router.get("/ready")
+async def readiness(request: Request, response: Response):
+    """Container readiness probe: returns 200 if snapshot is loaded, 503 if unavailable."""
+    state = request.app.state
+    loaded = getattr(state, "snapshot_loaded", False)
+    fetched_at = None
+    if loaded and hasattr(state, "manifest"):
+        fetched_at = state.manifest.get("fetched_at_utc")
+    if not loaded:
+        response.status_code = 503
+        return {
+            "status": "not_ready",
+            "snapshot_loaded": False,
+            "error": "Snapshot data not loaded",
+        }
+    return {
+        "status": "ready",
+        "snapshot_loaded": True,
         "snapshot_fetched_at": fetched_at,
     }
 
@@ -69,13 +93,23 @@ async def analysis(
     state = request.app.state
 
     if not getattr(state, "snapshot_loaded", False):
-        raise HTTPException(status_code=503, detail={"error": {"code": "SNAPSHOT_NOT_LOADED", "message": "Snapshot data is not loaded"}})
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": {"code": "SNAPSHOT_NOT_LOADED", "message": "Snapshot data is not loaded"}
+            },
+        )
 
     # Validate cutoff
     if cutoff not in settings.allowed_cutoffs:
         raise HTTPException(
             status_code=422,
-            detail={"error": {"code": "INVALID_CUTOFF", "message": f"cutoff must be one of {settings.allowed_cutoffs}"}},
+            detail={
+                "error": {
+                    "code": "INVALID_CUTOFF",
+                    "message": f"cutoff must be one of {settings.allowed_cutoffs}",
+                }
+            },
         )
 
     req_id = str(uuid.uuid4())[:8]
@@ -87,7 +121,9 @@ async def analysis(
         result = await asyncio.to_thread(state.get_analysis, cutoff)
     except Exception as e:
         logger.error(f"[{req_id}] Analysis failed: {e}")
-        raise HTTPException(status_code=500, detail={"error": {"code": "ANALYSIS_ERROR", "message": str(e)}})
+        raise HTTPException(
+            status_code=500, detail={"error": {"code": "ANALYSIS_ERROR", "message": str(e)}}
+        ) from e
 
     elapsed = time.monotonic() - t0
     logger.info(f"[{req_id}] completed in {elapsed:.4f}s")
@@ -106,12 +142,20 @@ async def interval_detail(
     state = request.app.state
 
     if not getattr(state, "snapshot_loaded", False):
-        raise HTTPException(status_code=503, detail={"error": {"code": "SNAPSHOT_NOT_LOADED", "message": "Snapshot not loaded"}})
+        raise HTTPException(
+            status_code=503,
+            detail={"error": {"code": "SNAPSHOT_NOT_LOADED", "message": "Snapshot not loaded"}},
+        )
 
     if cutoff not in settings.allowed_cutoffs:
         raise HTTPException(
             status_code=422,
-            detail={"error": {"code": "INVALID_CUTOFF", "message": f"cutoff must be one of {settings.allowed_cutoffs}"}},
+            detail={
+                "error": {
+                    "code": "INVALID_CUTOFF",
+                    "message": f"cutoff must be one of {settings.allowed_cutoffs}",
+                }
+            },
         )
 
     # Normalise the start ISO — replace URL-encoded colon if needed
@@ -128,6 +172,9 @@ async def interval_detail(
         cutoff,
     )
     if result is None:
-        raise HTTPException(status_code=422, detail={"error": {"code": "INVALID_START", "message": "Cannot parse start datetime"}})
+        raise HTTPException(
+            status_code=422,
+            detail={"error": {"code": "INVALID_START", "message": "Cannot parse start datetime"}},
+        )
 
     return result

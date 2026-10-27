@@ -1,7 +1,9 @@
 """Tests for analysis/cutoff.py"""
-import pytest
-from datetime import datetime, timezone
+
+from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
+
+import pytest
 
 from app.analysis.cutoff import cutoff_utc
 
@@ -52,19 +54,19 @@ class TestCutoffUtc:
     def test_bst_delivery_summer(self):
         """Synthetic BST: delivery 2026-06-15 01:00 UTC = 02:00 London.
         Decision date is 14 Jun London. Cutoff = 14 Jun 15:30 London = 14:30 UTC."""
-        delivery = datetime(2026, 6, 15, 1, 0, 0, tzinfo=timezone.utc)
+        delivery = datetime(2026, 6, 15, 1, 0, 0, tzinfo=UTC)
         result = cutoff_utc(delivery, "15:30")
         # 14 Jun 15:30 BST = 14:30 UTC
-        expected = datetime(2026, 6, 14, 14, 30, 0, tzinfo=timezone.utc)
+        expected = datetime(2026, 6, 14, 14, 30, 0, tzinfo=UTC)
         assert result == expected
 
     def test_autumn_clock_change(self):
         """Synthetic: delivery 2026-10-26 01:00 UTC.
-        London: 26 Oct 2026 at 01:00 UTC = 01:00 BST = 02:00 BST... 
+        London: 26 Oct 2026 at 01:00 UTC = 01:00 BST = 02:00 BST...
         Actually 26 Oct 2026 is clock-change day in UK (clocks go back at 1am UTC).
         At 01:00 UTC on 26 Oct, London is in GMT (already changed back).
         Local date = 26 Oct. Decision = 25 Oct. Cutoff = 25 Oct 15:30 GMT = 15:30 UTC."""
-        delivery = datetime(2026, 10, 26, 1, 0, 0, tzinfo=timezone.utc)
+        delivery = datetime(2026, 10, 26, 1, 0, 0, tzinfo=UTC)
         result = cutoff_utc(delivery, "15:30")
-        expected = datetime(2026, 10, 25, 15, 30, 0, tzinfo=timezone.utc)
+        expected = datetime(2026, 10, 25, 15, 30, 0, tzinfo=UTC)
         assert result == expected

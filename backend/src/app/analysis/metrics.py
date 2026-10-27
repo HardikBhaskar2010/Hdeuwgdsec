@@ -11,7 +11,6 @@ Error sign convention (D6): error = forecast - actual
 from __future__ import annotations
 
 import math
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -19,7 +18,7 @@ import pandas as pd
 EXPECTED_INTERVALS = 31 * 48  # 1,488
 
 
-def _safe_float(x) -> Optional[float]:
+def _safe_float(x) -> float | None:
     """Return float or None if NaN/None."""
     if x is None or (isinstance(x, float) and math.isnan(x)):
         return None
@@ -44,15 +43,21 @@ def compute_metrics(selected: pd.DataFrame) -> dict:
     # ── Global metrics ────────────────────────────────────────────────────────
     if n == 0:
         metrics = {
-            "mae": None, "rmse": None, "mbe": None, "wape_pct": None,
-            "p5_error": None, "p95_error": None, "unit": "MW", "n": 0,
+            "mae": None,
+            "rmse": None,
+            "mbe": None,
+            "wape_pct": None,
+            "p5_error": None,
+            "p95_error": None,
+            "unit": "MW",
+            "n": 0,
         }
     else:
         e = matched["error_mw"].values.astype(float)
         A = matched["actual_mw"].values.astype(float)
 
         mae = float(np.mean(np.abs(e)))
-        rmse = float(np.sqrt(np.mean(e ** 2)))
+        rmse = float(np.sqrt(np.mean(e**2)))
         mbe = float(np.mean(e))
         sum_A = float(np.sum(A))
         wape_pct = float(np.sum(np.abs(e)) / sum_A * 100) if sum_A > 0 else None
@@ -87,12 +92,14 @@ def compute_metrics(selected: pd.DataFrame) -> dict:
         sp_grp = matched.groupby("settlement_period")
         for sp, grp in sp_grp:
             e_sp = grp["error_mw"].values.astype(float)
-            by_sp.append({
-                "period": int(sp),
-                "mae": round(float(np.mean(np.abs(e_sp))), 2),
-                "mbe": round(float(np.mean(e_sp)), 2),
-                "n": len(grp),
-            })
+            by_sp.append(
+                {
+                    "period": int(sp),
+                    "mae": round(float(np.mean(np.abs(e_sp))), 2),
+                    "mbe": round(float(np.mean(e_sp)), 2),
+                    "n": len(grp),
+                }
+            )
     by_sp.sort(key=lambda x: x["period"])
 
     # ── By lead time ──────────────────────────────────────────────────────────
@@ -120,11 +127,13 @@ def compute_metrics(selected: pd.DataFrame) -> dict:
             if grp.empty:
                 continue
             e_l = grp["error_mw"].values.astype(float)
-            by_lead.append({
-                "bucket": bucket,
-                "mae": round(float(np.mean(np.abs(e_l))), 2),
-                "n": len(grp),
-            })
+            by_lead.append(
+                {
+                    "bucket": bucket,
+                    "mae": round(float(np.mean(np.abs(e_l))), 2),
+                    "n": len(grp),
+                }
+            )
 
     # ── Top 10 misses ─────────────────────────────────────────────────────────
     top_misses = []
@@ -133,26 +142,34 @@ def compute_metrics(selected: pd.DataFrame) -> dict:
         top["abs_error"] = top["error_mw"].abs()
         top = top.nlargest(10, "abs_error")
         for _, row in top.iterrows():
-            top_misses.append({
-                "start": row["start_utc"].isoformat(),
-                "forecast": round(float(row["forecast_mw"]), 2),
-                "actual": round(float(row["actual_mw"]), 2),
-                "error": round(float(row["error_mw"]), 2),
-                "publish_time": row["publish_time"].isoformat() if pd.notna(row["publish_time"]) else None,
-            })
+            top_misses.append(
+                {
+                    "start": row["start_utc"].isoformat(),
+                    "forecast": round(float(row["forecast_mw"]), 2),
+                    "actual": round(float(row["actual_mw"]), 2),
+                    "error": round(float(row["error_mw"]), 2),
+                    "publish_time": row["publish_time"].isoformat()
+                    if pd.notna(row["publish_time"])
+                    else None,
+                }
+            )
 
     # ── Intervals array ───────────────────────────────────────────────────────
     intervals = []
     for _, row in selected.iterrows():
-        intervals.append({
-            "start": row["start_utc"].isoformat(),
-            "forecast": _safe_float(row["forecast_mw"]),
-            "actual": _safe_float(row["actual_mw"]),
-            "error": _safe_float(row["error_mw"]),
-            "publish_time": row["publish_time"].isoformat() if pd.notna(row["publish_time"]) else None,
-            "lead_hours": _safe_float(row["lead_hours"]),
-            "status": row["status"],
-        })
+        intervals.append(
+            {
+                "start": row["start_utc"].isoformat(),
+                "forecast": _safe_float(row["forecast_mw"]),
+                "actual": _safe_float(row["actual_mw"]),
+                "error": _safe_float(row["error_mw"]),
+                "publish_time": row["publish_time"].isoformat()
+                if pd.notna(row["publish_time"])
+                else None,
+                "lead_hours": _safe_float(row["lead_hours"]),
+                "status": row["status"],
+            }
+        )
 
     return {
         "metrics": metrics,

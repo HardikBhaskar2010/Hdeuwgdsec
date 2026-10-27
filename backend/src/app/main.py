@@ -10,7 +10,6 @@ from __future__ import annotations
 import functools
 import logging
 import os
-import sys
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -29,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load snapshot at startup; release at shutdown."""
@@ -42,9 +42,9 @@ async def lifespan(app: FastAPI):
     logger.info(f"Loading snapshot from: {snapshot_dir}")
 
     try:
+        from app.analysis.service import build_analysis  # noqa: PLC0415
         from app.data.loader import load_snapshot  # noqa: PLC0415
         from app.data.normalise import normalise  # noqa: PLC0415
-        from app.analysis.service import build_analysis  # noqa: PLC0415
 
         fuelhh_raw, windfor_raw, manifest = load_snapshot(snapshot_dir)
         norm = normalise(fuelhh_raw, windfor_raw)
@@ -89,6 +89,7 @@ async def lifespan(app: FastAPI):
 
 # ── App ────────────────────────────────────────────────────────────────────────
 
+
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Wind Forecast Accuracy API",
@@ -111,6 +112,7 @@ def create_app() -> FastAPI:
 
     # Routes
     from app.api.routes import router  # noqa: PLC0415
+
     app.include_router(router)
 
     return app

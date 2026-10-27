@@ -8,6 +8,7 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.3.0",
     "pandas>=2.2.0",
+    "numpy>=1.26.0",
     "python-multipart>=0.0.9",
 ]
 
@@ -36,4 +37,5 @@ ignore = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 asyncio_mode = "auto"

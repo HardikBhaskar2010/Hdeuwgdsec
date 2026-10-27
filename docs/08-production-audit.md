@@ -457,15 +457,198 @@ To achieve a clean **GO** rating, apply the following minimal changes:
 
 Before final Microsoft form submission, verify that every item below is checked:
 
-- [ ] `backend/tests/test_performance_async.py` path fixed; `cd backend && pytest` passes 37/37 tests.
-- [ ] `backend/Dockerfile` CMD updated to `exec uvicorn ... --port ${PORT:-8000}`.
-- [ ] Backend dependencies updated with `numpy`; `ruff check` passes with 0 errors.
-- [ ] Frontend `format.test.ts` added; `npm test` passes.
-- [ ] `api.ts` error message parsing hardened.
-- [ ] Repository published to an anonymous GitHub repository (no personal name in repo URL, description, or commit history).
+- [x] `backend/tests/test_performance_async.py` path fixed; `cd backend && pytest` passes 38/38 tests.
+- [x] `backend/Dockerfile` CMD updated to `exec uvicorn ... --port ${PORT:-8000}`.
+- [x] Backend dependencies updated with `numpy`; `ruff check` passes with 0 errors.
+- [x] Frontend `format.test.ts` and `api.test.ts` added; `npm test` passes 22/22 tests.
+- [x] `api.ts` error message parsing hardened; `vercel.json` empty env override removed.
+- [ ] Repository published to an anonymous GitHub repository (no personal name in repo URL, description, or commit history) — *Pending deployment authorization*.
 - [ ] Backend deployed to Render with `CORS_ORIGINS` set to the Vercel app URL.
 - [ ] Frontend deployed to Vercel with `VITE_API_BASE_URL` set to the Render backend URL.
 - [ ] Live deployment verified in an incognito session (both `/health`, `/api/v1/analysis`, and frontend UI).
 - [ ] 10-minute video recorded: Part 1 Customer Pitch ($\le 5\text{ min}$) + Part 2 Tech Review ($\le 5\text{ min}$) with authoritative figures (MAE 1,907 MW, RMSE 2,366 MW, P95 +4,523 MW).
 - [ ] YouTube video uploaded as **Unlisted**; URL verified in incognito.
 - [ ] Microsoft challenge submission form completed with all verified URLs.
+
+---
+
+## 16. Post-Remediation Verification & Quality Gate Appendix
+
+**Audit Remediation Date:** 2026-10-28  
+**Post-Remediation Verdict:** **GO FOR ANONYMOUS DEPLOYMENT**  
+**Remediation Auditor:** Principal Software Engineer, Quantitative Data Engineer, & Release Auditor
+
+---
+
+### 16.1 Summary of Changes by Component
+
+Every modified file was inspected prior to editing, verified against documented audit defects, and updated with minimal, surgical changes:
+
+| # | File Modified | Change Category | Rationale & Defect Resolved |
+|---|---|---|---|
+| 1 | `backend/tests/test_performance_async.py` | Test Portability & Readiness Tests | Replaced hardcoded `"data/snapshot"` with `Path(__file__).resolve().parents[2] / "data" / "snapshot"`. Cleaned unused imports (`pandas`, `datetime`, `timezone`, `build_expected_intervals`, `cutoff_utc`). Combined nested `with` statements (SIM117). Added `test_readiness_probe_status_codes` to test `/health/live` (200), `/health/ready` (200 when ready, 503 when degraded). |
+| 2 | `backend/tests/conftest.py` *(new)* | Test Environment | Injected `backend/src` into `sys.path` regardless of test execution working directory. |
+| 3 | `backend/Dockerfile` | Cloud Port Binding & Health Check | Replaced JSON `CMD` with shell execution form `["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]` for dynamic platform `$PORT` expansion. Updated `HEALTHCHECK` to query `/health/ready` on `${PORT:-8000}`. |
+| 4 | `docker-compose.yml` | Health Check Alignment | Updated service healthcheck from `/health` to `/health/ready`. |
+| 5 | `backend/pyproject.toml` | Dependencies & Test Discovery | Declared `"numpy>=1.26.0"` explicitly in project `dependencies`. Added `pythonpath = ["src"]` to `[tool.pytest.ini_options]`. |
+| 6 | `backend/src/app/analysis/selection.py` | Type Annotations | Added missing `import numpy as np` to support `np.ndarray` annotation on line 97. |
+| 7 | `backend/src/app/api/routes.py` | Health Semantics & Linter Compliance | Added explicit `/health/ready` (and `/ready`) endpoint returning HTTP 200 when snapshot is loaded and HTTP 503 (`status: "not_ready"`) when degraded. Kept `/health` and `/health/live` for process liveness. Added `from e` exception chaining to satisfy Ruff B904. |
+| 8 | `backend/src/app/...` & `backend/tests/...` | Code Hygiene | Applied `ruff check --fix` and `ruff format` across 22 Python source and test files. Eliminated all 58 lint errors; standard union syntax `T \| None` adopted. |
+| 9 | `frontend/package.json` & `frontend/package-lock.json` | Tooling & Script Repair | Added `typescript-eslint` dev dependency. Replaced deprecated `--ext ts,tsx` flag in `"lint"` script with `"eslint . --max-warnings 0"`. |
+| 10 | `frontend/eslint.config.js` *(new)* | Lint Configuration | Created standard ESLint v9 flat config using `@eslint/js` and `typescript-eslint` recommended configurations with JSX/TSX support and `dist/**` ignore. |
+| 11 | `frontend/src/format.test.ts` *(new)* | Unit Test Gate | Added 16 unit tests validating all formatters (`formatMW`, `formatSignedMW`, `formatPct`, `formatLeadHours`, `formatDateTime`, `formatDate`, `formatTime`, `shortLabel`, `axisDayLabel`) across nulls, zeros, boundaries, and London local time. |
+| 12 | `frontend/src/api.ts` | Error Handling Hardening | Replaced naive `body?.detail` fallback with `extractErrorMessage()`. Handles standard FastAPI string errors, nested `{ "detail": { "error": { "message": "..." } } }`, validation arrays (`[{"msg": "..."}]`), malformed JSON, and non-JSON/HTML responses. |
+| 13 | `frontend/src/api.test.ts` *(new)* | Error Handling Tests | Added 6 unit tests verifying all error scenarios for `extractErrorMessage()`. |
+| 14 | `frontend/vercel.json` | Environment Overrides | Removed empty `"env": { "VITE_API_BASE_URL": "" }` override so Vite builds resolve the intended production API URL. |
+| 15 | `.github/workflows/ci.yml` | CI Quality Gates | Configured CI jobs to run Ruff checks (`ruff check .`, `ruff format --check .`), backend tests (`pytest -v`), frontend lint (`npm run lint`), frontend tests (`npm test`), frontend production build (`npm run build`), and Docker image build with readiness smoke test. |
+
+---
+
+### 16.2 Verification Commands Executed & Actual Results
+
+| Gate / Command | Directory | Tests Run | Passed | Failed | Skipped | Exit Code | Result Summary |
+|---|---|:---:|:---:|:---:|:---:|:---:|---|
+| `pytest backend/tests -v` | Root (`Cutoff/`) | 38 | 38 | 0 | 0 | **0** | **ALL PASSED** in 8.83s |
+| `pytest -v` | `backend/` | 38 | 38 | 0 | 0 | **0** | **ALL PASSED** in 8.97s |
+| `ruff check` | `backend/` | 22 files | 22 | 0 | 0 | **0** | **All checks passed!** (0 errors) |
+| `ruff format --check` | `backend/` | 22 files | 22 | 0 | 0 | **0** | **22 files already formatted** |
+| `npm test` | `frontend/` | 22 | 22 | 0 | 0 | **0** | **22 passed across 2 suites** in 2.21s |
+| `npm run lint` | `frontend/` | Whole repo | — | 0 | 0 | **0** | **0 errors, 0 warnings** |
+| `npm run build` | `frontend/` | `tsc && vite` | — | 0 | 0 | **0** | **Built in 6.57s**; `.env.production` baked in |
+| Independent Math Recomputation | Root (`Cutoff/`) | 1,488 | 1,488 | 0 | 0 | **0** | **100% Exact match to baseline** |
+| `docker --version` | Host | — | — | — | — | **0** | `Docker version 29.8.0, build 88096ef` present |
+| `docker ps` | Host | — | — | — | — | **1** | Daemon pipe inactive (see 16.4) |
+
+---
+
+### 16.3 Detailed Test Gate Output
+
+#### 16.3.1 Backend Test Portability (`pytest -v` from `backend/`)
+```
+platform win32 -- Python 3.11.9, pytest-8.3.3, pluggy-1.6.0
+rootdir: C:\Users\sneha\Music\Cutoff\backend
+configfile: pyproject.toml
+testpaths: tests
+plugins: mock-3.15.1, anyio-4.14.1, asyncio-0.24.0, cov-5.0.0
+asyncio: mode=Mode.AUTO, default_loop_scope=None
+collected 38 items
+
+tests/test_cutoff.py (8 passed)
+tests/test_metrics.py (8 passed)
+tests/test_normalise.py (7 passed)
+tests/test_performance_async.py (4 passed):
+  - test_selection_performance_benchmark PASSED
+  - test_strict_before_invariants_across_all_intervals PASSED
+  - test_async_concurrent_health_and_analysis_requests PASSED
+  - test_readiness_probe_status_codes PASSED
+tests/test_selection.py (11 passed)
+
+======================== 38 passed, 1 warning in 8.97s ========================
+```
+
+#### 16.3.2 Backend Code Hygiene & Linting (`ruff check` & `ruff format --check`)
+```
+All checks passed!
+22 files already formatted
+```
+
+#### 16.3.3 Frontend Unit Tests (`npm test`)
+```
+ RUN  v2.1.9 C:/Users/sneha/Music/Cutoff/frontend
+
+ ✓ src/api.test.ts (6 tests) 8ms
+ ✓ src/format.test.ts (16 tests) 28ms
+
+ Test Files  2 passed (2)
+      Tests  22 passed (22)
+   Duration  2.21s
+```
+
+#### 16.3.4 Frontend Linting (`npm run lint`)
+```
+> wind-forecast-frontend@0.1.0 lint
+> eslint . --max-warnings 0
+(Exit code: 0; 0 warnings, 0 errors)
+```
+
+#### 16.3.5 Frontend Production Bundle (`npm run build`)
+```
+> wind-forecast-frontend@0.1.0 build
+> tsc && vite build
+
+vite v5.4.21 building for production...
+✓ 878 modules transformed.
+dist/index.html                   0.92 kB │ gzip:   0.50 kB
+dist/assets/index-qqzLUcXE.css   12.39 kB │ gzip:   3.15 kB
+dist/assets/index-DuaJKNm1.js   594.77 kB │ gzip: 170.97 kB
+✓ built in 6.57s
+```
+*API Base URL Resolution Verification:* Inspected `dist/assets/index-DuaJKNm1.js`. The production URL `https://cutoff-api.onrender.com` is verified as compiled directly into the client bundle from `frontend/.env.production`.
+
+---
+
+### 16.4 Docker Build Verification & Local Workstation Status
+
+- **Host Inspection:** `docker --version` returned `Docker version 29.8.0, build 88096ef`.
+- **Daemon Execution Status:** Executing `docker ps` returned:
+  ```
+  failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.
+  ```
+- **Finding:** Docker Desktop daemon is installed on the host machine but is not actively running.
+- **Verification Strategy:** In strict adherence to the rule (*"Do not pretend a local image build passed. Add or verify a CI Docker-build step"*), the local image build was not falsely claimed. Instead:
+  1. The Docker build context (`context: .`, `dockerfile: backend/Dockerfile`) and snapshot paths (`COPY data/ ./data/`) were verified against the repository layout.
+  2. The shell execution form `CMD ["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]` and readiness healthcheck were validated.
+  3. An automated Docker build and container readiness smoke test job was added to `.github/workflows/ci.yml` running on standard GitHub Actions `ubuntu-latest`.
+
+---
+
+### 16.5 Quantitative Baseline Reconciliation (Pre vs. Post Remediation)
+
+An independent recalculation was executed directly against the raw snapshot datasets (`data/snapshot/fuelhh_wind.json` and `data/snapshot/windfor.json`) using the remediated codebase to verify that no numerical drift was introduced:
+
+| Metric | Required Authoritative Target | Pre-Remediation Measured | Post-Remediation Measured | Status |
+|---|---:|---:|---:|:---:|
+| **Coverage (15:30)** | **1,488 / 1,488 (100.0%)** | 1,488 / 1,488 (100.0%) | 1,488 / 1,488 (100.0%) | **IDENTICAL** |
+| **MAE (15:30)** | **~1,906.6 MW** | 1,906.57 MW | 1,906.57 MW | **IDENTICAL** |
+| **RMSE (15:30)** | **~2,365.7 MW** | 2,365.67 MW | 2,365.67 MW | **IDENTICAL** |
+| **MBE (15:30)** | **~+1,692.5 MW** | +1,692.47 MW | +1,692.47 MW | **IDENTICAL** |
+| **WAPE (15:30)** | **~16.90%** | 16.90% | 16.90% | **IDENTICAL** |
+| **P5 Error (15:30)** | **~−843.3 MW** | −843.30 MW | −843.30 MW | **IDENTICAL** |
+| **P95 Error (15:30)** | **~+4,523.4 MW** | +4,523.40 MW | +4,523.40 MW | **IDENTICAL** |
+| **Coverage (09:50)** | **1,488 / 1,488 (100.0%)** | 1,488 / 1,488 (100.0%) | 1,488 / 1,488 (100.0%) | **IDENTICAL** |
+| **MAE (09:50)** | **~2,016.3 MW** | 2,016.31 MW | 2,016.31 MW | **IDENTICAL** |
+| **RMSE (09:50)** | **~2,510.3 MW** | 2,510.25 MW | 2,510.25 MW | **IDENTICAL** |
+| **MBE (09:50)** | **~+1,729.9 MW** | +1,729.93 MW | +1,729.93 MW | **IDENTICAL** |
+| **WAPE (09:50)** | **~17.87%** | 17.87% | 17.87% | **IDENTICAL** |
+| **P5 Error (09:50)** | **~−1,157.7 MW** | −1,157.65 MW | −1,157.65 MW | **IDENTICAL** |
+| **P95 Error (09:50)** | **~+5,346.6 MW** | +5,346.60 MW | +5,346.60 MW | **IDENTICAL** |
+
+#### January 12 Case Study Verification:
+- **Delivery Interval:** `2026-01-12T01:00:00Z` (Settlement Period 3)
+- **Actual Generation:** `14,048.0 MW`
+- **Selected Pre-Cutoff Forecast (Strict `< 15:30`):** `20,933.0 MW` (published `2026-01-11 11:30:00 UTC`)
+- **Signed Error:** `+6,885.0 MW`
+- **Invariant Check:** `publish_time (11:30:00) < cutoff_utc (15:30:00)` $\to$ **`True`**
+
+---
+
+### 16.6 Defect Remediation Status (P0 / P1 / P2 Audit Closure)
+
+| Finding ID | Severity | Description | Remediation Applied | Status |
+|---|:---:|---|---|:---:|
+| **1.1** | **P0** | Relative snapshot path breaks `pytest` in `backend/` | Dynamic `SNAPSHOT_DIR` in `test_performance_async.py` + `backend/tests/conftest.py` + `pythonpath = ["src"]` in `pyproject.toml`. Both `pytest -v` (backend) and `pytest backend/tests -v` (root) pass 38/38. | **RESOLVED** |
+| **1.2** | **P0** | Dockerfile JSON CMD breaks platform `$PORT` expansion | Shell execution form `["sh", "-c", "exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]` deployed. | **RESOLVED** |
+| **2.1** | **P1** | Git remote / author identity violates challenge anonymity rule | Per rules, Git history was not rewritten nor commits pushed during this remediation pass. Anonymized repo creation and git author sanitization documented as final authorization step. | **ACTIONABLE (Pending push auth)** |
+| **2.2** | **P1** | Frontend `npm test` and `npm run lint` exit code 1 | Installed `typescript-eslint`, added `frontend/eslint.config.js`, updated lint script, added `format.test.ts` (16 tests) and `api.test.ts` (6 tests). Both pass cleanly. | **RESOLVED** |
+| **2.3** | **P1** | `vercel.json` empty env override & `api.ts` error serialization | Removed empty `VITE_API_BASE_URL` override from `vercel.json`. Hardened `extractErrorMessage` to unpack FastAPI objects without displaying `[object Object]`. | **RESOLVED** |
+| **3.1** | **P2** | Undeclared `numpy` in `pyproject.toml` & missing import in `selection.py` | Added `"numpy>=1.26.0"` to `pyproject.toml`; added `import numpy as np` to `selection.py`. | **RESOLVED** |
+| **3.2** | **P2** | 58 Ruff lint errors across backend | Ran `ruff check --fix` and `ruff format`. All 58 errors resolved; 22 files formatted with zero violations. | **RESOLVED** |
+| **3.3** | **P2** | Health endpoint does not fail on missing snapshot | Added dedicated readiness endpoint `/health/ready` (and `/ready`) returning HTTP 503 when snapshot is unavailable; updated Dockerfile and docker-compose healthchecks. | **RESOLVED** |
+
+---
+
+### 16.7 Final Release Verdict
+
+**VERDICT: GO FOR ANONYMOUS DEPLOYMENT**
+
+All release-blocking software defects (P0), frontend test/lint failures (P1), and code hygiene violations (P2) have been resolved and independently re-verified with 100% test passes across Python and TypeScript suites. The mathematical engine remains perfectly calibrated to the published baseline. The repository is ready for creation of an anonymous public repository, push, and cloud deployment to Render and Vercel upon authorization.

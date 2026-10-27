@@ -15,7 +15,7 @@ all dates (tested with spring/autumn synthetic examples in the test suite).
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
 LONDON = ZoneInfo("Europe/London")
@@ -63,4 +63,4 @@ def cutoff_utc(delivery_start_utc: datetime, cutoff_hhmm: str) -> datetime:
         tzinfo=LONDON,
     )
 
-    return cutoff_london.astimezone(timezone.utc)
+    return cutoff_london.astimezone(UTC)

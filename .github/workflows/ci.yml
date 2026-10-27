@@ -23,15 +23,21 @@ jobs:
           cd backend
           python -m pip install --upgrade pip
           pip install -e .
-          pip install pytest ruff
+          pip install pytest pytest-asyncio httpx ruff
+
+      - name: Run Ruff checks & formatting validation
+        run: |
+          cd backend
+          ruff check .
+          ruff format --check .
 
       - name: Run backend tests
         run: |
           cd backend
-          pytest
+          pytest -v
 
   frontend:
-    name: Frontend Lint & Build
+    name: Frontend Quality & Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +54,34 @@ jobs:
           cd frontend
           npm ci
 
-      - name: Type check & build
+      - name: Run ESLint
+        run: |
+          cd frontend
+          npm run lint
+
+      - name: Run frontend unit tests
+        run: |
+          cd frontend
+          npm test
+
+      - name: Type check & production build
         run: |
           cd frontend
           npm run build
+
+  docker:
+    name: Docker Build & Smoke Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend Docker image
+        run: docker build -t cutoff-backend -f backend/Dockerfile .
+
+      - name: Verify container startup & readiness probe
+        run: |
+          docker run -d --name cutoff-api -p 8000:8000 -e PORT=8000 cutoff-backend
+          sleep 5
+          docker logs cutoff-api
+          curl --fail --retry 5 --retry-connrefused http://127.0.0.1:8000/health/ready
+          docker stop cutoff-api

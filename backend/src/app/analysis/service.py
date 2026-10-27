@@ -5,10 +5,8 @@ Orchestrates the full analysis pipeline with LRU caching per cutoff.
 
 from __future__ import annotations
 
-import functools
 import hashlib
 import json
-from datetime import timezone
 from typing import Any
 
 import pandas as pd
@@ -109,12 +107,14 @@ def get_interval_detail(
     for _, row in vintages_df.iterrows():
         eligible = bool(row["publishTime"] < pd.Timestamp(cutoff_dt))
         chosen = eligible and (chosen_pub is not None) and (row["publishTime"] == chosen_pub)
-        vintages.append({
-            "publish_time": row["publishTime"].isoformat(),
-            "generation": float(row["forecast_mw"]),
-            "eligible": eligible,
-            "chosen": bool(chosen),
-        })
+        vintages.append(
+            {
+                "publish_time": row["publishTime"].isoformat(),
+                "generation": float(row["forecast_mw"]),
+                "eligible": eligible,
+                "chosen": bool(chosen),
+            }
+        )
 
     return {
         "start": T.isoformat(),

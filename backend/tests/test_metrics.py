@@ -1,14 +1,13 @@
 """Tests for analysis/metrics.py — hand-calculated fixtures."""
-import pytest
-import math
+
 import pandas as pd
+import pytest
 
 from app.analysis.metrics import compute_metrics
 
 
 def _make_selected(rows: list[dict]) -> pd.DataFrame:
     """Build a selected DataFrame from a list of dicts."""
-    from datetime import timezone
     df = pd.DataFrame(rows)
     df["start_utc"] = pd.to_datetime(df["start_utc"], utc=True)
     df["cutoff_utc"] = pd.to_datetime(df["cutoff_utc"], utc=True)
@@ -38,9 +37,11 @@ def _row(start, forecast, actual, pub=PUB_ISO, lead=25.5, sp=1, status="MATCHED"
 
 class TestMetrics:
     def test_empty_gives_nulls(self):
-        df = _make_selected([
-            _row("2026-01-02T00:00:00Z", 10000, 10000, status="NO_FORECAST"),
-        ])
+        df = _make_selected(
+            [
+                _row("2026-01-02T00:00:00Z", 10000, 10000, status="NO_FORECAST"),
+            ]
+        )
         result = compute_metrics(df)
         m = result["metrics"]
         assert m["mae"] is None
@@ -56,7 +57,7 @@ class TestMetrics:
         """
         rows = [
             _row("2026-01-02T00:00:00Z", 11000.0, 10000.0, sp=1),  # error +1000
-            _row("2026-01-02T00:30:00Z", 9500.0, 10000.0, sp=2),   # error -500
+            _row("2026-01-02T00:30:00Z", 9500.0, 10000.0, sp=2),  # error -500
             _row("2026-01-02T01:00:00Z", 10250.0, 10000.0, sp=3),  # error +250
         ]
         df = _make_selected(rows)
@@ -90,12 +91,15 @@ class TestMetrics:
 
     def test_p5_p95_sign_convention(self):
         """P5 < 0 means under-forecast 5th pct; P95 > 0 means over-forecast 95th pct."""
-        import numpy as np
         # Create 100 errors: mostly positive (over-forecast bias)
         errors = list(range(-200, 800, 10))  # 100 values from -200 to 790
         rows = [
-            _row(f"2026-01-02T{i:02d}:00:00Z" if i < 24 else f"2026-01-02T{i%24:02d}:30:00Z",
-                 10000.0 + e, 10000.0, sp=1)
+            _row(
+                f"2026-01-02T{i:02d}:00:00Z" if i < 24 else f"2026-01-02T{i%24:02d}:30:00Z",
+                10000.0 + e,
+                10000.0,
+                sp=1,
+            )
             for i, e in enumerate(errors)
         ]
         df = _make_selected(rows)
@@ -130,7 +134,7 @@ class TestMetrics:
         """Top misses are sorted by |error| descending."""
         rows = [
             _row("2026-01-02T00:00:00Z", 12000.0, 10000.0, sp=1),  # error +2000
-            _row("2026-01-02T00:30:00Z", 9000.0, 10000.0, sp=2),   # error -1000
+            _row("2026-01-02T00:30:00Z", 9000.0, 10000.0, sp=2),  # error -1000
             _row("2026-01-02T01:00:00Z", 10100.0, 10000.0, sp=3),  # error +100
         ]
         df = _make_selected(rows)
