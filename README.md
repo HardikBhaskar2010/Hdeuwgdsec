@@ -5,6 +5,16 @@
 > Features a high-contrast **Deep Black & White Theme** designed according to Web Interface Guidelines and trading terminal UX.  
 > Powered by Elexon BMRS API (`WINDFOR` and `FUELHH`).
 
+[![Live App](https://img.shields.io/badge/Live%20App-Cutoff%20Portal-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://cutoff-submission.vercel.app/)
+[![API Status](https://img.shields.io/badge/API-Render%20Online-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://cutoff-api-rwt1.onrender.com/health/ready)
+[![API Docs](https://img.shields.io/badge/OpenAPI-Swagger%20UI-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://cutoff-api-rwt1.onrender.com/docs)
+[![Test Suite](https://img.shields.io/badge/Tests-38%2F38%20Passing-success?style=for-the-badge)](https://github.com/HardikBhaskar2010/Cutoff)
+
+- **Production Web Application:** [Cutoff · Wind Forecast Accuracy](https://cutoff-submission.vercel.app/)
+- **Production Backend API (Render):** [https://cutoff-api-rwt1.onrender.com](https://cutoff-api-rwt1.onrender.com)
+- **API Readiness Health Probe:** [https://cutoff-api-rwt1.onrender.com/health/ready](https://cutoff-api-rwt1.onrender.com/health/ready)
+- **Interactive OpenAPI Documentation:** [https://cutoff-api-rwt1.onrender.com/docs](https://cutoff-api-rwt1.onrender.com/docs)
+
 ---
 
 ## 1. Product Purpose & Overview
@@ -23,11 +33,21 @@ Commercial energy buyers, balancing traders, and hedge managers commit to multi-
 
 | Service | Target | URL | Description |
 |---|---|---|---|
-| **Web Portal** | **Vercel** (Production) | [cutoff-submission.vercel.app](https://cutoff-submission.vercel.app) | Single-Page Trading Dashboard (React 18 + Vite) |
+| **Web Portal** | **Vercel** (Production) | [Cutoff · Wind Forecast Accuracy](https://cutoff-submission.vercel.app/) | Single-Page Trading Dashboard (React 18 + Vite) |
 | **Backend API** | **Render** (Production) | [cutoff-api-rwt1.onrender.com](https://cutoff-api-rwt1.onrender.com) | FastAPI Production Service (Docker) |
-| **API Health** | **Render** | [`/health/ready`](https://cutoff-api-rwt1.onrender.com/health/ready) | Readiness probe verifying loaded snapshot dataset |
-| **Analysis Endpoint** | **Render** | [`/api/v1/analysis?cutoff=15:30`](https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30) | Core metrics, time series, & breakdowns |
-| **Interactive OpenAPI Docs** | **Render** | [`/docs`](https://cutoff-api-rwt1.onrender.com/docs) | Swagger UI interactive contract |
+| **API Health** | **Render** | [`https://cutoff-api-rwt1.onrender.com/health/ready`](https://cutoff-api-rwt1.onrender.com/health/ready) | Readiness probe verifying loaded snapshot dataset |
+| **Analysis Endpoint** | **Render** | [`https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30`](https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30) | Core metrics, time series, & breakdowns |
+| **Interactive OpenAPI Docs** | **Render** | [`https://cutoff-api-rwt1.onrender.com/docs`](https://cutoff-api-rwt1.onrender.com/docs) | Swagger UI interactive contract |
+
+#### Quick API Verification
+```bash
+# Verify API readiness
+curl https://cutoff-api-rwt1.onrender.com/health/ready
+
+# Fetch January 2026 summary metrics for default 15:30 cutoff
+curl https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30
+```
+
 
 
 ---
@@ -87,7 +107,7 @@ Cutoff/
 │   │   │   └── service.py         # Orchestration & LRU caching
 │   │   └── api/
 │   │       └── routes.py          # Async endpoints with asyncio.to_thread
-│   └── tests/                     # 37 comprehensive pytest unit & async tests
+│   └── tests/                     # 38 comprehensive pytest unit & async tests
 │       ├── test_cutoff.py         # D-1 timezone and calendar conversions
 │       ├── test_normalise.py      # Timestamp & duplicate handling tests
 │       ├── test_selection.py      # Strict cutoff boundary & anti-hindsight tests
@@ -111,10 +131,8 @@ Cutoff/
 │       ├── types.ts               # TypeScript data models mirroring schemas.py
 │       ├── format.ts              # Financial & engineering number formatters
 │       └── index.css              # Deep Black & White Design System
-├── docs/                          # Architecture decision records and specs
 ├── scripts/
 │   └── fetch_snapshot.py          # Ingestion script to pull data from Elexon BMRS
-├── walkthrough.md                 # Complete engineering & commercial walkthrough
 ├── docker-compose.yml             # Single-command local orchestration
 ├── .gitignore                     # Git ignore rules for Python & Node
 ├── .env.example                   # Environment variable template
@@ -124,6 +142,8 @@ Cutoff/
 ---
 
 ## 6. How to Start
+
+> **Instant Cloud Access:** The system is fully deployed. You can evaluate the live dashboard immediately without local setup at [Cutoff · Wind Forecast Accuracy](https://cutoff-submission.vercel.app/).
 
 ### Option A: Docker Compose (Recommended One-Liner)
 To run both backend (port 8000) and frontend (port 5173) together:
@@ -229,20 +249,30 @@ On January 12, 2026 at **Settlement Period 3** (01:00–01:30 UTC; verified in r
 
 ---
 
-## 9. Test Suite Verification (37/37 Passing)
+## 9. Test Suite Verification (38 Backend + 22 Frontend Passing)
 
+### Backend Pytest (38/38 Passing)
 ```
 ============================= test session starts =============================
-platform win32 -- Python 3.11.9, pytest-9.1.1
-collected 37 items
+platform win32 -- Python 3.11.9, pytest-9.0.3
+collected 38 items
 
-backend\tests\test_cutoff.py ........                                    [ 21%]
-backend\tests\test_metrics.py ........                                   [ 43%]
-backend\tests\test_normalise.py .......                                  [ 62%]
-backend\tests\test_performance_async.py ...                              [ 70%]
-backend\tests\test_selection.py ...........                              [100%]
+tests\test_cutoff.py ........                                            [ 21%]
+tests\test_metrics.py ........                                           [ 42%]
+tests\test_normalise.py .......                                          [ 60%]
+tests\test_performance_async.py ....                                     [ 71%]
+tests\test_selection.py ...........                                      [100%]
 
-============================= 37 passed in 5.65s ==============================
+============================= 38 passed in 10.11s =============================
+```
+
+### Frontend Vitest (22/22 Passing)
+```
+ ✓ src/api.test.ts (6 tests)
+ ✓ src/format.test.ts (16 tests)
+
+ Test Files  2 passed (2)
+      Tests  22 passed (22)
 ```
 
 ---
@@ -252,4 +282,4 @@ backend\tests\test_selection.py ...........                              [100%]
 In accordance with the challenge brief requirements:
 - **AI Tools Used:** Claude Sonnet 3.7 / 4.6 and Gemini 3.8 Flash via Antigravity Agentic IDE.
 - **Where Applied:** Architectural planning, test case generation, CSS polish, and documentation structuring.
-- **Verification:** All data pipelines, mathematical formulas, and selection invariants were verified with 37 deterministic pytest unit tests and browser integration testing.
+- **Verification:** All data pipelines, mathematical formulas, and selection invariants were verified with 38 deterministic pytest unit tests, 22 vitest frontend unit tests, and browser integration testing.
