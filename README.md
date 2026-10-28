@@ -200,12 +200,14 @@ In wholesale electricity trading, auction order books close strictly at the desi
 
 To guarantee zero hindsight leakage:
 For each delivery half-hour settlement interval $T$:
-1. Derive the decision date: $D_{\text{decision}} = \text{local\_date}(T) - 1\text{ day}$ in `Europe/London` calendar time.
-2. Build the cutoff: $T_{\text{cutoff}} = D_{\text{decision}} \text{ at HH:MM}$ (e.g. `15:30:00 Europe/London`).
+1. Derive the decision date in `Europe/London` calendar time:
+   $$D_{\text{decision}} = \operatorname{localDate}(T) - 1\,\text{day}$$
+2. Build the cutoff (e.g. `15:30:00 Europe/London`):
+   $$T_{\text{cutoff}} = D_{\text{decision}} \text{ at HH:MM}$$
 3. Filter available forecasts with strict `publishTime < cutoff` semantics:
    $$\text{Eligible} = \{ f \in \text{WINDFOR} \mid f.\text{startTime} = T \land f.\text{publishTime} < T_{\text{cutoff}} \}$$
 4. Choose the latest eligible vintage:
-   $$f^*(T) = \arg\max_{f \in \text{Eligible}} (f.\text{publishTime})$$
+   $$f^*(T) = \operatorname*{arg\,max}_{f \in \text{Eligible}} f.\text{publishTime}$$
 
 *Any forecast published at or after the cutoff time is strictly rejected to prevent hindsight bias (strict publishTime < cutoff).*
 
