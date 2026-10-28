@@ -8,7 +8,7 @@ services:
     region: singapore
     envVars:
       - key: CORS_ORIGINS
-        value: "https://dn23fbvruw4423dss.vercel.app,https://cutoff-submission.vercel.app,https://frontend-luna-kitsunes-projects.vercel.app,http://localhost:5173"
+        value: "https://dn23fbvruw4423dss.vercel.app,http://localhost:5173"
       - key: SNAPSHOT_DIR
         value: "/app/data/snapshot"
     healthCheckPath: /health/ready
