@@ -399,7 +399,7 @@ function IntervalDetail({ start, cutoff }: { start: string; cutoff: string }) {
         </table>
       </div>
       <div style={{ marginTop: 10, fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        Strict-before rule enforces <code style={{ color: '#ffffff' }}>publishTime &lt; cutoff</code>. Only forecast vintages published strictly prior to the auction order book gate closure ({cutoff} London) were genuinely available for bidding decisions.
+        Selection rule: strict <code style={{ color: '#ffffff' }}>publishTime &lt; cutoff</code>. Only forecast vintages published strictly prior to the auction order book gate closure ({cutoff} London) were genuinely available for bidding decisions.
       </div>
     </div>
   )
@@ -411,7 +411,7 @@ function MethodologyPanel({ data }: { data: AnalysisResponse }) {
   return (
     <details className="method-panel">
       <summary className="method-summary">
-        <span>Methodology, Defensible Cutoff Rule &amp; Calculation Reconciliation</span>
+        <span>Methodology, Defensible Cutoff Rule (strict publishTime &lt; cutoff) &amp; Calculation Reconciliation</span>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
           {data.coverage.coverage_pct.toFixed(1)}% coverage · {q.warnings.length} warnings
         </span>
@@ -429,22 +429,23 @@ function MethodologyPanel({ data }: { data: AnalysisResponse }) {
             </ul>
           </div>
           <div className="method-section">
-            <h4>Defensible Strict-Before Selection Rule (<code style={{ color: '#fff' }}>publishTime &lt; cutoff</code>)</h4>
+            <h4>Defensible Selection Rule: strict <code style={{ color: '#fff' }}>publishTime &lt; cutoff</code></h4>
             <div className="method-code">{`for each delivery interval T:
   cutoff = London(date(T) - 1 day, ${data.cutoff.time})
   eligible = WINDFOR[startTime == T ∧ publishTime < cutoff]
   chosen = max(publishTime) among eligible
   error = forecast - actual`}</div>
             <p style={{ marginTop: '8px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-              A forecast published at exactly 15:30:00 cannot be ingested, normalized, and traded before gate closure closes at 15:30:00. Strict-before selection ensures that all selected vintages were genuinely available before auction deadlines.
+              A forecast published at or after the cutoff timestamp cannot be ingested, normalized, and traded before gate closure closes. Strict selection (strict publishTime &lt; cutoff) ensures that all selected vintages were genuinely available before auction deadlines.
             </p>
           </div>
           <div className="method-section">
             <h4>Calculation Reconciliation (Authoritative Values)</h4>
             <ul>
-              <li><strong>Authoritative Strict-Before (`&lt;`):</strong> MAE = <strong>1,907 MW</strong> (1,906.6 MW), RMSE = <strong>2,366 MW</strong> (2,365.7 MW), MBE = <strong>+1,692 MW</strong>, P95 = <strong>+4,523 MW</strong>.</li>
-              <li><strong>Legacy Inclusive (`&le;`):</strong> MAE was 1,877 MW, RMSE was 2,331 MW. The difference is caused by excluding the 15:30:00 forecast files which were timestamped at the exact auction deadline.</li>
+              <li><strong>Authoritative Strict Rule (strict publishTime &lt; cutoff):</strong> MAE = <strong>1,907 MW</strong> (1,906.6 MW), RMSE = <strong>2,366 MW</strong> (2,365.7 MW), MBE = <strong>+1,692 MW</strong>, P95 = <strong>+4,523 MW</strong>.</li>
+              <li><strong>Legacy Inclusive Comparison (`publishTime &le; cutoff`):</strong> Preliminary runs with inclusive selection yielded MAE 1,877 MW and RMSE 2,331 MW, reflecting hindsight inclusion of vintages published at the deadline minute.</li>
               <li>WAPE = <strong>16.90%</strong> (volume-weighted relative error across all 1,488 intervals).</li>
+              <li><strong>Bias Diagnostic (Latest-Ever Forecast):</strong> Evaluating the latest-ever forecast vintage across all horizons yields an over-forecast bias of <strong>+1,492 MW</strong> (vs. +1,692 MW at D−1 15:30), confirming that positive bias was systemic across forecast horizons rather than solely a Day-Ahead lead time artifact.</li>
             </ul>
           </div>
           <div className="method-section">
@@ -623,7 +624,7 @@ export default function App() {
                     tooltip="Informs risk planning and downside volume sizing; does not guarantee sufficient backup capacity. In 95% of half-hours, wind undershot forecast by less than +4,523 MW."
                   />
                   <Kpi
-                    label="Market Coverage"
+                    label="Data Coverage"
                     value={formatPct(data.coverage.coverage_pct)}
                     unit={`${data.coverage.matched} / ${data.coverage.expected} intervals`}
                     isWhite={false}
@@ -734,7 +735,7 @@ export default function App() {
           <strong>Cutoff Energy Analytics</strong> · GB Day-Ahead Wind Forecast Accuracy Portal · January 2026 Elexon Dataset
         </div>
         <div>
-          Strict Anti-Hindsight Selection (<code style={{ color: '#fff' }}>publishTime &lt; cutoff</code>) · All times in Europe/London
+          Selection rule: strict <code style={{ color: '#fff' }}>publishTime &lt; cutoff</code> · All times in Europe/London
         </div>
       </footer>
 

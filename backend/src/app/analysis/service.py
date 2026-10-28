@@ -53,7 +53,7 @@ def build_analysis(
         "cutoff": {
             "time": cutoff_hhmm,
             "timezone": "Europe/London",
-            "rule": "latest forecast with publishTime < cutoff on day before delivery (strict-before)",
+            "rule": "strict publishTime < cutoff on day before delivery",
         },
         "metrics": result["metrics"],
         "coverage": result["coverage"],

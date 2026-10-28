@@ -1,0 +1,46 @@
+name: Server Health Check & Keep-Alive
+
+'on':
+  schedule:
+    # Run every 5 minutes to prevent Render free-tier instance from sleeping (spins down after 15 min of inactivity)
+    - cron: '*/5 * * * *'
+  workflow_dispatch: # Allow manual trigger from GitHub Actions tab
+
+jobs:
+  health-check:
+    name: Ping Production API
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping Readiness Probe
+        run: |
+          echo "Pinging production backend readiness health probe..."
+          HTTP_STATUS=$(curl -s -o response.json -w "%{http_code}" \
+            --connect-timeout 30 \
+            --max-time 60 \
+            --retry 3 \
+            --retry-delay 10 \
+            https://cutoff-api-rwt1.onrender.com/health/ready)
+          
+          echo "HTTP Status Code: $HTTP_STATUS"
+          cat response.json
+          echo ""
+
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::error::Health check failed with status $HTTP_STATUS"
+            exit 1
+          fi
+
+      - name: Warm Analysis Cache
+        run: |
+          echo "Pinging core analysis endpoint to pre-warm in-memory LRU cache..."
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --connect-timeout 20 \
+            --max-time 45 \
+            "https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30")
+          
+          echo "Analysis Endpoint HTTP Status: $HTTP_STATUS"
+          if [ "$HTTP_STATUS" -ne 200 ]; then
+            echo "::warning::Analysis cache warm-up returned status $HTTP_STATUS"
+          fi

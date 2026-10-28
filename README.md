@@ -5,12 +5,12 @@
 > Features a high-contrast **Deep Black & White Theme** designed according to Web Interface Guidelines and trading terminal UX.  
 > Powered by Elexon BMRS API (`WINDFOR` and `FUELHH`).
 
-[![Live App](https://img.shields.io/badge/Live%20App-Cutoff%20Portal-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://cutoff-submission.vercel.app/)
+[![Live App](https://img.shields.io/badge/Live%20App-Cutoff%20Portal-000000?style=for-the-badge&logo=vercel&logoColor=white)](https://dn23fbvruw4423dss.vercel.app/)
 [![API Status](https://img.shields.io/badge/API-Render%20Online-46E3B7?style=for-the-badge&logo=render&logoColor=white)](https://cutoff-api-rwt1.onrender.com/health/ready)
 [![API Docs](https://img.shields.io/badge/OpenAPI-Swagger%20UI-85EA2D?style=for-the-badge&logo=swagger&logoColor=black)](https://cutoff-api-rwt1.onrender.com/docs)
-[![Test Suite](https://img.shields.io/badge/Tests-38%2F38%20Passing-success?style=for-the-badge)](https://github.com/HardikBhaskar2010/Cutoff)
+[![Test Suite](https://img.shields.io/badge/Tests-38%2F38%20Passing-success?style=for-the-badge)](https://github.com/HardikBhaskar2010/Hdeuwgdsec)
 
-- **Production Web Application:** [Cutoff · Wind Forecast Accuracy](https://cutoff-submission.vercel.app/)
+- **Production Web Application:** [Cutoff · Wind Forecast Accuracy](https://dn23fbvruw4423dss.vercel.app/)
 - **Production Backend API (Render):** [https://cutoff-api-rwt1.onrender.com](https://cutoff-api-rwt1.onrender.com)
 - **API Readiness Health Probe:** [https://cutoff-api-rwt1.onrender.com/health/ready](https://cutoff-api-rwt1.onrender.com/health/ready)
 - **Interactive OpenAPI Documentation:** [https://cutoff-api-rwt1.onrender.com/docs](https://cutoff-api-rwt1.onrender.com/docs)
@@ -24,7 +24,7 @@ Commercial energy buyers, balancing traders, and hedge managers commit to multi-
 - **Under-forecast ($Forecast < Actual$):** Wind over-delivers; the buyer is **long** and forced to spill or sell surplus power at discounted System Sell prices.
 
 **Cutoff** is a high-density analytics portal designed to:
-1. **Isolate the exact forecast vintage available at decision time (D-1 cutoff)** with strict anti-hindsight guarantees (`publishTime < cutoff`).
+1. **Isolate the exact forecast vintage available at decision time (D-1 cutoff)** with strict anti-hindsight guarantees (strict `publishTime < cutoff`).
 2. **Quantify forecast error and downside risk (P5/P95)** across all 1,488 half-hour settlement periods of January 2026, allowing desks to accurately dimension operational hedge buffers.
 
 ---
@@ -33,7 +33,7 @@ Commercial energy buyers, balancing traders, and hedge managers commit to multi-
 
 | Service | Target | URL | Description |
 |---|---|---|---|
-| **Web Portal** | **Vercel** (Production) | [Cutoff · Wind Forecast Accuracy](https://cutoff-submission.vercel.app/) | Single-Page Trading Dashboard (React 18 + Vite) |
+| **Web Portal** | **Vercel** (Production) | [Cutoff · Wind Forecast Accuracy](https://dn23fbvruw4423dss.vercel.app/) | Single-Page Trading Dashboard (React 18 + Vite) |
 | **Backend API** | **Render** (Production) | [cutoff-api-rwt1.onrender.com](https://cutoff-api-rwt1.onrender.com) | FastAPI Production Service (Docker) |
 | **API Health** | **Render** | [`https://cutoff-api-rwt1.onrender.com/health/ready`](https://cutoff-api-rwt1.onrender.com/health/ready) | Readiness probe verifying loaded snapshot dataset |
 | **Analysis Endpoint** | **Render** | [`https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30`](https://cutoff-api-rwt1.onrender.com/api/v1/analysis?cutoff=15:30) | Core metrics, time series, & breakdowns |
@@ -76,13 +76,11 @@ Built with Python 3.11+, FastAPI, and pandas, adhering to `async-python-patterns
 1. **Non-Blocking Asynchronous Concurrency:**
    - All CPU-bound DataFrame filtering and metric calculations in `/api/v1/analysis` and `/api/v1/intervals/{start}` are offloaded to worker threads via `asyncio.to_thread`.
    - The FastAPI asyncio event loop remains 100% non-blocking for concurrent health checks, telemetry, and requests.
-2. **Algorithmic Selection Optimization (45x Speedup):**
+2. **Algorithmic Selection Optimization:**
    - Pre-indexes `FUELHH` outturn actuals in $O(1)$ memory lookup tables.
-   - Groups and pre-sorts all 114,000+ `WINDFOR` forecast vintages by `startTime`, transforming the 1,488-interval selection from $O(N \times M)$ full dataframe scans into instantaneous $O(1)$ group lookups.
-   - Total selection time reduced from **715 ms to ~45 ms**.
+   - Groups and pre-sorts all 114,000+ `WINDFOR` forecast vintages by `startTime`, transforming the 1,488-interval selection from full dataframe scans into fast grouped lookups.
 3. **In-Memory LRU Caching:**
-   - Decision cutoffs (`15:30` and `09:50`) are pre-computed and cached in-memory during FastAPI startup lifespan.
-   - API response time for cached analysis is **< 3 milliseconds**.
+   - Decision cutoffs (`15:30` and `09:50`) are pre-computed and cached in-memory during FastAPI startup lifespan for low-latency responses.
 
 ---
 
@@ -143,11 +141,13 @@ Cutoff/
 
 ## 6. How to Start
 
-> **Instant Cloud Access:** The system is fully deployed. You can evaluate the live dashboard immediately without local setup at [Cutoff · Wind Forecast Accuracy](https://cutoff-submission.vercel.app/).
+> **Instant Cloud Access:** The system is fully deployed. You can evaluate the live dashboard immediately without local setup at [Cutoff · Wind Forecast Accuracy](https://dn23fbvruw4423dss.vercel.app/).
 
 ### Option A: Docker Compose (Recommended One-Liner)
 To run both backend (port 8000) and frontend (port 5173) together:
 ```bash
+git clone https://github.com/HardikBhaskar2010/Hdeuwgdsec.git
+cd Hdeuwgdsec
 docker compose up --build
 ```
 Open [http://localhost:5173](http://localhost:5173) in your browser.
@@ -155,6 +155,11 @@ Open [http://localhost:5173](http://localhost:5173) in your browser.
 ---
 
 ### Option B: Manual Local Setup
+
+```bash
+git clone https://github.com/HardikBhaskar2010/Hdeuwgdsec.git
+cd Hdeuwgdsec
+```
 
 #### 1. Backend (Python 3.11 or 3.12)
 ```bash
@@ -170,7 +175,7 @@ source .venv/bin/activate
 # Install package in editable mode
 pip install -e .
 
-# Run test suite (all 37 tests must pass)
+# Run test suite (all 38 tests must pass)
 pytest
 
 # Start development server
@@ -190,19 +195,19 @@ Frontend runs on [http://localhost:5173](http://localhost:5173).
 
 ## 7. Methodology & Mathematical Rigour
 
-### 7.1 Anti-Hindsight Selection Rule (Strict-Before)
+### 7.1 Anti-Hindsight Selection Rule (strict publishTime < cutoff)
 In wholesale electricity trading, auction order books close strictly at the designated gate closure minute. A forecast timestamped with the exact gate closure minute (e.g. `15:30:00`) cannot realistically be downloaded, processed through valuation and risk models, and submitted as an order before gate closure occurs.
 
 To guarantee zero hindsight leakage:
 For each delivery half-hour settlement interval $T$:
 1. Derive the decision date: $D_{\text{decision}} = \text{local\_date}(T) - 1\text{ day}$ in `Europe/London` calendar time.
 2. Build the cutoff: $T_{\text{cutoff}} = D_{\text{decision}} \text{ at HH:MM}$ (e.g. `15:30:00 Europe/London`).
-3. Filter available forecasts with **strict-before** semantics:
+3. Filter available forecasts with strict `publishTime < cutoff` semantics:
    $$\text{Eligible} = \{ f \in \text{WINDFOR} \mid f.\text{startTime} = T \land f.\text{publishTime} < T_{\text{cutoff}} \}$$
 4. Choose the latest eligible vintage:
    $$f^*(T) = \arg\max_{f \in \text{Eligible}} (f.\text{publishTime})$$
 
-*Any forecast published at or after the cutoff time is strictly rejected to prevent hindsight bias.*
+*Any forecast published at or after the cutoff time is strictly rejected to prevent hindsight bias (strict publishTime < cutoff).*
 
 ### 7.2 Error Sign Convention
 $$\text{Error} = \text{Forecast} - \text{Actual}$$
@@ -218,16 +223,18 @@ $$\text{Error} = \text{Forecast} - \text{Actual}$$
 
 ### 7.4 Calculation Reconciliation & Defensible Cutoff Rule
 A key methodological audit was performed reconciling preliminary prototype metrics with final production figures:
-- **Authoritative Production Calculation (Strict-Before `publishTime < cutoff`):**
+- **Authoritative Production Calculation (strict publishTime < cutoff):**
   - **MAE:** **1,906.6 MW** (Display: **1,907 MW**)
   - **RMSE:** **2,365.7 MW** (Display: **2,366 MW**)
   - **MBE:** **+1,692.5 MW** (Display: **+1,692 MW**)
   - **P95:** **+4,523.4 MW** (Display: **+4,523 MW**)
   - **WAPE:** **16.90%**
-- **Legacy Prototype Calculation (Inclusive `publishTime <= cutoff`):**
-  - Preliminary runs reported MAE 1,877.1 MW and RMSE 2,331.2 MW.
-  - **Why the difference?** The legacy prototype permitted forecasts timestamped *at* `15:30:00 UTC` to be chosen. In reality, the EPEX GB auction order book closes strictly at 15:30:00 London. A forecast released at 15:30:00 cannot realistically be ingested, priced, and traded before gate closure occurs.
-  - Enforcing strict `< 15:30:00` selection ensures that every selected vintage was genuinely available prior to the auction deadline, making the methodology defensible and establishing **MAE 1,907 MW** and **RMSE 2,366 MW** as the authoritative truth.
+- **Legacy Prototype Comparison (`publishTime <= cutoff`):**
+  - Preliminary runs with inclusive selection permitted forecasts timestamped *at* `15:30:00 UTC` to be chosen, yielding MAE 1,877.1 MW and RMSE 2,331.2 MW.
+  - In reality, the EPEX GB auction order book closes strictly at 15:30:00 London. A forecast released at 15:30:00 cannot realistically be ingested, priced, and traded before gate closure occurs.
+  - Enforcing strict `publishTime < cutoff` selection ensures that every selected vintage was genuinely available prior to the auction deadline, making the methodology defensible and establishing **MAE 1,907 MW** and **RMSE 2,366 MW** as the authoritative truth.
+- **Bias Diagnostic (Latest-Ever Forecast):**
+  - Evaluating the latest-ever forecast vintage across all horizons yields an over-forecast bias of **+1,492 MW** (vs. +1,692 MW at D−1 15:30), proving that systemic over-forecasting was an inherent model feature across lead times rather than solely a Day-Ahead artifact.
 
 ---
 
@@ -235,7 +242,7 @@ A key methodological audit was performed reconciling preliminary prototype metri
 
 *Note: 15:30 aligns with EPEX SPOT GB half-hourly auction, and 09:50 aligns with Nord Pool N2EX hourly auction gate closure. These are distinct auction products; this comparison examines forecast accuracy sensitivity to decision lead time.*
 
-| Metric | 15:30 Cutoff (Strict `<`) | 09:50 Cutoff (Strict `<`) | Variance ($\Delta$) | Forecast Sensitivity Insight |
+| Metric | 15:30 Cutoff (strict publishTime < cutoff) | 09:50 Cutoff (strict publishTime < cutoff) | Variance ($\Delta$) | Forecast Sensitivity Insight |
 |---|---:|---:|---:|---|
 | **Coverage** | 100% (1,488 / 1,488) | 100% (1,488 / 1,488) | 0 | Full month sample integrity |
 | **MAE** | 1,906.6 MW | 2,016.3 MW | **+109.7 MW** | Earlier deadline increases error |
@@ -280,6 +287,7 @@ tests\test_selection.py ...........                                      [100%]
 ## 10. AI Tool Disclosure
 
 In accordance with the challenge brief requirements:
-- **AI Tools Used:** Claude Sonnet 3.7 / 4.6 and Gemini 3.8 Flash via Antigravity Agentic IDE.
-- **Where Applied:** Architectural planning, test case generation, CSS polish, and documentation structuring.
-- **Verification:** All data pipelines, mathematical formulas, and selection invariants were verified with 38 deterministic pytest unit tests, 22 vitest frontend unit tests, and browser integration testing.
+- **AI Assistance:**
+  - **Claude:** Assisted with architectural planning, domain modeling, technical specifications, and methodology review.
+  - **Gemini (via Antigravity IDE):** Assisted with code implementation, test suite generation, CSS styling, and documentation.
+- **Verification:** All data pipelines, mathematical formulas, and selection invariants were authored and verified with 38 deterministic pytest unit tests, 22 vitest frontend unit tests, and cross-reconciliation against raw Elexon BMRS datasets.
